@@ -1,0 +1,3592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spatialized Prisoner's Dilemma (with PTFT)</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/vs2015.min.css" rel="stylesheet" />
+  <style>
+    :root{
+      --panel-bg:#efefef;
+      --panel-border:#c9c9c9;
+      --text:#222;
+    }
+
+    body{
+      margin:0;
+      padding: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      color:var(--text);
+      background:#ffffff;
+      overflow-x: clip;
+      touch-action: pan-y;
+    }
+
+    .app{
+      max-width: 1280px;
+      margin: 0 auto;
+      display:grid;
+      grid-template-columns: 240px 1fr 300px 240px;
+      grid-template-rows: min-content auto;
+      gap: 16px 16px;
+      align-items:start;
+      position: relative;
+    }
+
+    .left-stack{
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 240px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .world-title{
+      grid-column: 2;
+      grid-row: 1;
+      display:flex;
+      align-items:baseline;
+      justify-content:space-between;
+      gap:12px;
+    }
+
+    .canvas-wrap{
+      grid-column: 2;
+      grid-row: 2;
+    }
+
+    .plots-panel{
+      grid-column: 3;
+      grid-row: 2;
+      align-self: start;
+    }
+
+    .right-stack{
+      grid-column: 4;
+      grid-row: 2;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-self: start;
+    }
+
+    /* Mobile layout helpers (default desktop behavior) */
+    .strategies-behavior-row{
+      display: contents;
+    }
+
+    .payoffs-grid{
+      display: block;
+    }
+    .payoffs-col{
+      display: block;
+    }
+    .payoff-control{
+      margin-bottom: 12px;
+    }
+    .payoff-control:last-child{
+      margin-bottom: 0;
+    }
+
+    .panel{
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      padding: 12px;
+    }
+
+    .panel h2{
+      font-size: 0.875rem;
+      margin: 0 0 10px 0;
+      font-weight: 700;
+    }
+
+    .group{
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid #ddd;
+    }
+
+    .group-title{
+      font-size: 0.8125rem;
+      font-weight: 700;
+      margin: 0 0 8px 0;
+    }
+
+    label{
+      font-size: 0.75rem;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+
+    input[type="range"], select{
+      width: 100%;
+      min-height: 44px;
+      cursor: pointer;
+    }
+
+    .slider-row{
+      display:grid;
+      grid-template-columns: 1fr 56px;
+      align-items:center;
+      gap:10px;
+      margin: 10px 0;
+    }
+
+    .value-pill{
+      display:inline-block;
+      text-align:right;
+      font-variant-numeric: tabular-nums;
+      font-size: 0.75rem;
+      padding: 6px 8px;
+      background: #fff;
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      min-width: 56px;
+      box-sizing:border-box;
+    }
+
+    .buttonbar{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      margin-top: 8px;
+    }
+
+    button{
+      padding: 8px 10px;
+      border: 1px solid #888;
+      background: #fff;
+      border-radius: 6px;
+      cursor:pointer;
+      font-weight: 700;
+      font-size: 0.75rem;
+      text-transform: none;
+      min-width: 56px;
+      min-height: 44px;
+    }
+
+    .primary-btn{
+      background: #e9f3ff;
+      min-height: 44px;
+    }
+
+    /* Large screens: primary buttons fill row width */
+    @media (min-width: 1051px) {
+      .controls-panel .buttonbar:first-child {
+        flex-wrap: nowrap;
+      }
+      .controls-panel .buttonbar:first-child .primary-btn {
+        flex: 1 1 0;
+      }
+    }
+
+    .button-wide{
+      width: 150px;
+      flex: 0 0 150px;
+      white-space: nowrap;
+      height: 44px;
+      line-height: 44px;
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+
+    .payoffs-reset-bar {
+      justify-content: flex-start;
+    }
+
+    @media (max-width: 1050px) {
+      .payoffs-reset-bar {
+        justify-content: center;
+      }
+    }
+    button:active{ transform: translateY(1px); }
+
+    .world{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+
+    .world-title h1{
+      font-size: 1rem;
+      margin: 0;
+      font-weight: 800;
+    }
+    .world-title .ticks{
+      font-size: 0.75rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .canvas-wrap{
+      background:#fff;
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      padding: 10px;
+    }
+
+    /* Keep logical canvas at grid size; scale visually like NetLogo patches */
+    #worldCanvas{
+      width: 448px;  /* 64 * 7 */
+      height: 448px;
+      display:block;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      background:#fff;
+      border: 1px solid #ddd;
+    }
+
+    .mini-table{
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.75rem;
+      background:#fff;
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      overflow:hidden;
+    }
+    .mini-table th, .mini-table td{
+      padding: 6px 8px;
+      border-bottom: 1px solid #eee;
+      text-align:left;
+      font-variant-numeric: tabular-nums;
+    }
+    .mini-table th{
+      background:#f7f7f7;
+      font-weight: 800;
+    }
+    .mini-table tr:last-child td{ border-bottom:none; }
+
+    .swatch{
+      width: 12px;
+      height: 12px;
+      border: 1px solid #999;
+      display:inline-block;
+      vertical-align: -2px;
+      margin-right: 6px;
+    }
+
+    .note{
+      font-size: 0.75rem;
+      line-height: 1.35;
+      color:#333;
+      margin-top: 10px;
+    }
+
+    .plot-panel{
+      /* no extra margin */
+    }
+
+    .plot-canvas{
+      width: 100%;
+      height: 180px;
+      display:block;
+      background:#fff;
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+    }
+
+    .top-section{
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #f8f8f6;
+      padding: 0;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .tab-btn{
+      padding: 14px 20px;
+      border: none;
+      background: transparent;
+      font-size: 0.9375rem;
+      font-weight: 600;
+      color: #555;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      min-width: auto;
+      min-height: 44px;
+    }
+
+    .tab-btn:hover{
+      color: #333;
+      background: rgba(0,0,0,0.03);
+    }
+
+    .tab-btn:focus-visible{
+      outline: 2px solid #0066cc;
+      outline-offset: -2px;
+      background: rgba(0,102,204,0.05);
+    }
+
+    .tab-btn.active{
+      color: #0066cc;
+      border-bottom-color: #0066cc;
+    }
+
+    .tab-content{
+      display: none;
+    }
+
+    .tab-content.active{
+      display: block;
+    }
+
+    .copy-bar{
+      display: none;
+      padding: 12px 16px;
+      background: #1e1e1e;
+    }
+
+    .copy-bar.visible{
+      display: flex;
+      position: sticky;
+      justify-content: flex-start;
+      align-items: center;
+      margin-top: 16px;
+      z-index: 99;
+      top: 48px; /* sit below tab bar */
+    }
+
+    .copy-btn{
+      width: 50px;
+      height: 50px;
+      min-height: auto;
+      padding: 0;
+      border: 1px solid #444;
+      background: #2d2d2d;
+      color: #a0a0a0;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+
+    .copy-btn:hover{
+      background: #3c3c3c;
+      border-color: #555;
+      color: #d4d4d4;
+    }
+
+    .copy-btn:active{
+      background: #444;
+    }
+
+    .copy-btn:focus-visible{
+      outline: 2px solid #0066cc;
+      outline-offset: 2px;
+    }
+
+    .copy-btn.copied{
+      background: #66bb6a;
+      border-color: #4caf50;
+      color: #2e7d32;
+    }
+
+    .copy-btn svg{
+      width: 30px;
+      height: 30px;
+    }
+
+    .copy-btn .icon-check{
+      display: none;
+    }
+
+    .copy-btn.copied .icon-copy{
+      display: none;
+    }
+
+    .copy-btn.copied .icon-check{
+      display: block;
+    }
+
+    .code-copied-text{
+      display: none;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: #81c784;
+      margin-left: 10px;
+    }
+
+    .code-copied-text.visible{
+      display: inline;
+    }
+
+    @media (max-width: 400px) {
+      .code-copied-text {
+        display: none !important;
+      }
+    }
+
+    .pseudo-heading{
+      color: #6db3f2;
+    }
+
+    .code-view{
+      padding: 16px;
+      background: #1e1e1e;
+      min-height: calc(100vh - 100px);
+      overflow-x: auto;
+    }
+
+    .code-view pre{
+      margin: 0;
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      white-space: pre;
+      background: transparent !important;
+    }
+
+    /* Allow pseudo-code to wrap on small screens */
+    @media (max-width: 400px) {
+      .code-view {
+        padding: 16px 8px;
+      }
+      
+      .code-view pre code.nohighlight{
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+      }
+    }
+
+    .code-view pre code{
+      font-family: 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: 0.8125rem;
+      color: #d4d4d4;
+    }
+
+    .code-view pre code.hljs{
+      background: transparent;
+      padding: 0;
+    }
+
+    .references-view{
+      padding: 40px 32px 32px 32px;
+      background: #fff;
+      max-width: 800px;
+      box-sizing: border-box;
+    }
+
+    @media (max-width: 500px) {
+      .references-view {
+        padding: 40px 16px 16px 16px;
+      }
+    }
+
+    @media (max-width: 400px) {
+      .references-view {
+        padding: 40px 8px 16px 8px;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        max-width: 100%;
+      }
+      
+      .references-view .citation-block {
+        padding: 16px;
+      }
+    }
+
+    .references-view h2{
+      font-size: 0.8125rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 0 0 16px 0;
+      font-weight: 600;
+      color: #666;
+    }
+
+    .references-view .citation-section{
+      margin-bottom: 40px;
+    }
+
+    .references-view .citation-block{
+      background: #f8f8f6;
+      border: 1px solid #e5e5e5;
+      border-radius: 8px;
+      padding: 20px 24px;
+      font-size: 0.9375rem;
+      line-height: 1.7;
+      color: #333;
+    }
+
+    .references-view .citation-block em{
+      font-style: italic;
+    }
+
+    .references-view .pdf-link{
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 12px;
+      padding: 8px 16px;
+      background: #0066cc;
+      color: #fff;
+      border-radius: 6px;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+
+    .references-view .pdf-link:hover{
+      background: #0052a3;
+      text-decoration: none;
+    }
+
+    .references-view .pdf-link:focus-visible{
+      outline: 2px solid #0066cc;
+      outline-offset: 2px;
+    }
+
+    .references-view .pdf-link svg{
+      width: 16px;
+      height: 16px;
+    }
+
+    .references-view .source-section{
+      margin-bottom: 24px;
+    }
+
+    .references-view .repo-list{
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .references-view .repo-item{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      background: #f8f8f6;
+      border: 1px solid #e5e5e5;
+      border-radius: 8px;
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .references-view .repo-item:hover{
+      border-color: #ccc;
+      background: #f0f0ee;
+    }
+
+    .references-view .repo-icon{
+      width: 24px;
+      height: 24px;
+      flex-shrink: 0;
+      color: #555;
+    }
+
+    .references-view .repo-info{
+      flex: 1;
+      min-width: 0;
+    }
+
+    .references-view .repo-name{
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #222;
+      margin-bottom: 2px;
+    }
+
+    .references-view .repo-url{
+      font-size: 0.75rem;
+      color: #555;
+      text-decoration: none;
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .references-view .repo-url:hover{
+      color: #0066cc;
+      text-decoration: underline;
+    }
+
+    .references-view .repo-url:focus-visible{
+      outline: 2px solid #0066cc;
+      outline-offset: 2px;
+      color: #0066cc;
+    }
+
+    .references-view a{
+      color: #0066cc;
+      text-decoration: none;
+    }
+
+    .references-view a:hover{
+      text-decoration: underline;
+    }
+
+    .copy-citation-btn{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      color: #666;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+      min-width: auto;
+      min-height: auto;
+      width: 24px;
+      height: 24px;
+    }
+
+    .copy-citation-btn:hover{
+      background: #f5f5f5;
+      border-color: #999;
+      color: #333;
+    }
+
+    .copy-citation-btn .icon-check{
+      display: none;
+    }
+
+    .copy-citation-btn.copied{
+      background: #e8f5e9;
+      border-color: #4caf50;
+      color: #2e7d32;
+    }
+
+    .copy-citation-btn.copied .icon-copy{
+      display: none;
+    }
+
+    .copy-citation-btn.copied .icon-check{
+      display: inline;
+    }
+
+    .copied-text{
+      display: none;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      color: #2e7d32;
+      text-transform: none;
+    }
+
+    .copied-text.visible{
+      display: inline;
+    }
+
+    /* Screen reader only text */
+    .sr-only{
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .tab-bar{
+      display: flex;
+      gap: 0;
+      padding: 8px 16px 0 16px;
+      justify-content: space-between;
+    }
+
+    @media (min-width: 768px){
+      .tab-bar{
+        padding: 12px 24px 0 24px;
+      }
+    }
+
+    .tab-bar-left{
+      display: flex;
+      gap: 0;
+    }
+
+    .tab-bar-right{
+      display: flex;
+      gap: 0;
+    }
+
+    .main-content{
+      padding: 40px 16px 16px 16px;
+    }
+
+    /* Mobile tab visibility */
+    .mobile-only { display: none; }
+    .desktop-only { display: inline-flex; }
+
+    @media (max-width: 767px) {
+      .mobile-only { display: inline-flex; }
+      .desktop-only { display: none; }
+    }
+
+    /* Segmented control for mobile source code view - iOS style (blue) */
+    .segmented-control {
+      display: none;
+      position: relative;
+      background: rgba(0, 122, 255, 0.12);
+      border: 1px solid rgba(0, 122, 255, 0.35);
+      border-radius: 9999px; /* fully rounded (50%+) */
+      padding: 2px;
+      width: 100%;
+      max-width: 400px;
+      margin: 0 auto 8px auto;
+      box-sizing: border-box;
+    }
+
+    /* Sliding indicator pill */
+    .segment-indicator {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: calc(33.33% - 1.33px); /* default for 3 segments */
+      height: calc(100% - 4px);
+      background: #007aff; /* iOS system blue */
+      border-radius: 9999px; /* fully rounded (50%+) */
+      box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+      transition: left 0.2s cubic-bezier(0.25, 0.1, 0.25, 1), width 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Show segmented control only on mobile when sourcecode tab is active */
+    @media (max-width: 767px) {
+      .copy-bar.visible.sourcecode-active .segmented-control {
+        display: flex;
+      }
+    }
+
+    /* Small screens: adjust segmented control and copy button layout */
+    @media (max-width: 400px) {
+      .copy-bar.visible.sourcecode-active {
+        gap: 12px;
+      }
+      
+      .copy-bar.visible.sourcecode-active .segmented-control {
+        flex: 1;
+        margin: 0;
+      }
+      
+      .copy-bar.visible.sourcecode-active .copy-btn {
+        width: 36px;
+        height: 36px;
+        flex-shrink: 0;
+      }
+      
+      .copy-bar.visible.sourcecode-active .copy-btn svg {
+        width: 20px;
+        height: 20px;
+      }
+    }
+
+    .segment-btn {
+      flex: 1;
+      padding: 7px 12px;
+      border: none;
+      background: transparent;
+      border-radius: 9999px; /* fully rounded (50%+) */
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: #90c7f5;
+      cursor: pointer;
+      transition: color 0.15s ease;
+      position: relative;
+      z-index: 1;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      min-height: auto;
+      min-width: auto;
+    }
+
+    .segment-btn:hover {
+      color: #d3e4f9;
+    }
+
+    .segment-btn.active {
+      color: #ffffff;
+    }
+
+    .segment-btn:focus-visible {
+      outline: 2px solid #007aff;
+      outline-offset: 2px;
+    }
+    /* Mobile source code panel */
+    .mobile-code-panel {
+      display: none;
+    }
+
+    .mobile-code-panel.active {
+      display: block;
+    }
+
+    @media (max-width: 1050px){
+      .app{
+        grid-template-columns: 1fr;
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* Mobile order: Title+Grid, Controls, Plots, Strategies, Behavior, Payoffs */
+      .left-stack, .right-stack {
+        display: contents;
+      }
+      .world-title { order: 1; }
+      .canvas-wrap { order: 2; }
+      .controls-panel { order: 3; }
+      .plots-panel { order: 4; }
+      .strategies-panel { order: 5; }
+      .behavior-panel { order: 6; }
+      .payoffs-panel { order: 7; }
+
+      /* Mobile: show Strategies + Behavior totals side-by-side */
+      .strategies-behavior-row{
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        order: 5;
+      }
+
+      /* Mobile: Payoffs heading in its own row; sliders in two columns */
+      .payoffs-grid{
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .payoffs-col{
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .payoff-card{
+        margin-bottom: 0;
+      }
+
+
+      #worldCanvas{
+        width: min(90vw, 448px);
+        height: min(90vw, 448px);
+      }
+
+      .canvas-wrap {
+        max-width: 100%;
+      }
+    }
+
+    /* Small screens (iPhone mini, SE, etc.) */
+    @media (max-width: 400px) {
+      .tab-bar {
+        padding: 8px 8px 0 8px;
+      }
+      
+      .main-content {
+        padding: 40px 8px 16px 8px;
+      }
+      
+      [data-content="model"] .canvas-wrap {
+        padding: 4px;
+        margin-left: -8px;
+        margin-right: -8px;
+        width: calc(100% + 16px);
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+      }
+      
+      #worldCanvas{
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1 / 1;
+        max-width: none;
+      }
+    }
+  
+/* Mobile: make Setup and Go buttons fill the entire row */
+@media (max-width: 1050px) {
+  .controls-panel .buttonbar:first-child {
+    flex-wrap: nowrap !important;
+  }
+  #resetBtn,
+  #startBtn {
+    flex: 1 1 0 !important;
+    min-width: 0 !important;
+    width: auto !important;
+  }
+}
+
+
+/* Payoffs: subgroup cards (CC/CD/DC/DD) */
+.payoff-card{
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,0.10);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.03);
+}
+/* keep spacing consistent */
+.payoffs-col{ gap: 10px; }
+
+/* Mobile overrides */
+@media (max-width: 768px) {
+  .payoff-card{ padding: 10px; }
+}
+
+
+/* Payoffs: make the inner CC/CD/DC/DD label act as the sole group label */
+.payoffs-panel .payoff-card .slider-row label{
+  display:inline-block;
+  min-width: 28px;
+  margin: 0;
+}
+
+
+/* Desktop: add spacing between the four payoff cards */
+@media (min-width: 769px) {
+  .payoffs-grid {
+    gap: 8px;
+  }
+  .payoffs-grid .payoff-card {
+    margin: 0; /* rely on grid gap */
+  }
+}
+
+
+/* Desktop (>1050px): stack all payoff cards in a single column with vertical spacing */
+@media (min-width: 1051px) {
+  .payoffs-grid{
+    display: flex;
+    flex-direction: column;
+    gap: 10px; /* vertical distance between payoff groupings */
+  }
+  .payoffs-col{
+    display: contents; /* remove the intermediate column wrappers */
+  }
+}
+
+/* Add this at the end of your <style> block */
+.hljs-title, .hljs-variable {
+  color: #f6aaf7 !important;
+}
+
+</style>
+</head>
+<body>
+  <div class="top-section">
+    <div class="tab-bar" role="tablist" aria-label="Content sections">
+      <div class="tab-bar-left">
+        <button class="tab-btn active" data-tab="model" role="tab" aria-selected="true" aria-controls="panel-model" id="tab-model">Run Simulation</button>
+        <button class="tab-btn desktop-only" data-tab="netlogo" role="tab" aria-selected="false" aria-controls="panel-netlogo" id="tab-netlogo">NetLogo</button>
+        <button class="tab-btn desktop-only" data-tab="javascript" role="tab" aria-selected="false" aria-controls="panel-javascript" id="tab-javascript">JavaScript</button>
+        <button class="tab-btn desktop-only" data-tab="pseudocode" role="tab" aria-selected="false" aria-controls="panel-pseudocode" id="tab-pseudocode">Pseudo-code</button>
+        <button class="tab-btn mobile-only" data-tab="sourcecode" role="tab" aria-selected="false" aria-controls="panel-sourcecode" id="tab-sourcecode">Source Code</button>
+      </div>
+      <div class="tab-bar-right">
+        <button class="tab-btn" data-tab="references" role="tab" aria-selected="false" aria-controls="panel-references" id="tab-references">References</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="copy-bar" id="copyBar">
+    <div class="segmented-control" id="mobileSegmentedControl" role="tablist" aria-label="Source code language">
+      <div class="segment-indicator" id="segmentIndicator"></div>
+      <button class="segment-btn active" data-segment="netlogo" data-index="0" role="tab" aria-selected="true">NetLogo</button>
+      <button class="segment-btn" data-segment="javascript" data-index="1" role="tab" aria-selected="false">JavaScript</button>
+      <button class="segment-btn" data-segment="pseudocode" data-index="2" role="tab" aria-selected="false">Pseudo-code</button>
+    </div>
+    <button class="copy-btn" id="copyBtn" title="Copy to clipboard" aria-label="Copy source code to clipboard">
+      <svg class="icon-copy" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 4v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7.242a2 2 0 0 0-.602-1.43L16.083 2.57A2 2 0 0 0 14.685 2H10a2 2 0 0 0-2 2z"/>
+        <path d="M16 18v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2"/>
+      </svg>
+      <svg class="icon-check" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+    </button>
+    <span id="codeCopiedText" class="code-copied-text">Copied!</span>
+  </div>
+
+  <!-- Live region for screen reader announcements -->
+  <div id="srAnnounce" aria-live="polite" aria-atomic="true" class="sr-only"></div>
+
+  <div class="tab-content active" data-content="model" role="tabpanel" id="panel-model" aria-labelledby="tab-model">
+    <div class="main-content">
+      <div class="app">
+
+    <!-- Left column: controls + payoffs -->
+    <div class="left-stack">
+    <div class="panel controls-panel">
+      <div class="buttonbar">
+        <button id="resetBtn" class="primary-btn" title="setup">setup</button>
+        <button id="startBtn" class="primary-btn" title="go">go</button>
+      </div>
+
+      <div class="buttonbar">
+        <button id="toggleDisplayBtn" class="button-wide" title="Toggle display">show "ethnicities"</button>
+        <button id="desegregateBtn" class="button-wide" title="Toggle segregation">desegregate</button>
+      </div>
+
+      <div class="slider-row" style="margin-top: 12px;">
+        <label for="rounds_to_play">rounds to play</label>
+        <span class="value-pill" id="rounds_to_play_value">200</span>
+      </div>
+      <input type="range" id="rounds_to_play" min="4" max="400" step="4" value="200" />
+
+      <div class="slider-row">
+        <label for="imitation_radius">imitation radius</label>
+        <span class="value-pill" id="imitation_radius_value">1.5</span>
+      </div>
+      <input type="range" id="imitation_radius" min="1" max="3" step="0.5" value="1.5" />
+    </div>
+
+    <!-- Payoffs panel -->
+    <div class="panel payoffs-panel">
+      <h2>Payoffs</h2>
+      <div class="payoffs-grid">
+        <div class="payoffs-col">
+          <div class="payoff-card payoff-cc">
+<div class="slider-row">
+              <label for="payoffs_cc">CC</label>
+              <span class="value-pill" id="payoffs_cc_value">3</span>
+            </div>
+            <input type="range" id="payoffs_cc" min="0" max="10" step="1" value="3" />
+          </div>
+
+          <div class="payoff-card payoff-cd">
+<div class="slider-row">
+              <label for="payoffs_cd">CD</label>
+              <span class="value-pill" id="payoffs_cd_value">0</span>
+            </div>
+            <input type="range" id="payoffs_cd" min="0" max="10" step="1" value="0" />
+          </div>
+        </div>
+
+        <div class="payoffs-col">
+          <div class="payoff-card payoff-dc">
+<div class="slider-row">
+              <label for="payoffs_dc">DC</label>
+              <span class="value-pill" id="payoffs_dc_value">5</span>
+            </div>
+            <input type="range" id="payoffs_dc" min="0" max="10" step="1" value="5" />
+          </div>
+
+          <div class="payoff-card payoff-dd">
+<div class="slider-row">
+              <label for="payoffs_dd">DD</label>
+              <span class="value-pill" id="payoffs_dd_value">1</span>
+            </div>
+            <input type="range" id="payoffs_dd" min="0" max="10" step="1" value="1" />
+          </div>
+        </div>
+      </div>
+
+      <div class="buttonbar payoffs-reset-bar">
+        <button id="payoffsResetBtn" class="button-wide" title="Reset payoffs">reset</button>
+      </div>
+    </div>
+    </div><!-- .left-stack -->
+
+    <!-- Center: world title (row 1) -->
+    <div class="world-title">
+      <h1>Spatialized Prisoner's Dilemma (with PTFT)</h1>
+      <div class="ticks">round: <span id="ticks">0</span></div>
+    </div>
+
+    <!-- Center: world canvas (row 2) -->
+    <div class="canvas-wrap">
+      <div id="displayMode" style="font-size:0.75rem;font-weight:400;margin-bottom:6px;">Displaying strategies</div>
+      <canvas id="worldCanvas" width="64" height="64" role="img" aria-label="64 by 64 grid simulation showing agent strategies or ethnicities. Strategy counts are listed in the Strategies table."></canvas>
+    </div>
+
+    <div class="panel plot-panel plots-panel">
+      <h2>Plots (NetLogo)</h2>
+      <div style="font-size:0.75rem;font-weight:700;margin:6px 0 6px 0;">Strategies</div>
+      <canvas id="strategiesPlot" class="plot-canvas" width="320" height="180" role="img" aria-label="Line chart showing strategy population counts over time"></canvas>
+      <div style="font-size:0.75rem;font-weight:700;margin:10px 0 6px 0;">Behavior</div>
+      <canvas id="behaviorPlot" class="plot-canvas" width="320" height="180" role="img" aria-label="Line chart showing cooperation and defection totals over time"></canvas>
+    </div>
+
+    <!-- Right column: strategies + behavior -->
+    <div class="right-stack">
+      <div class="strategies-behavior-row">
+    <div class="panel strategies-panel">
+      <h2>Strategies</h2>
+      <table class="mini-table">
+        <tr><th>strategy</th><th>count</th></tr>
+        <tr><td><span class="swatch" style="background:#00C000"></span>000 AllD</td><td id="count_s0">0</td></tr>
+        <tr><td><span class="swatch" style="background:#00FFFF"></span>001</td><td id="count_s1">0</td></tr>
+        <tr><td><span class="swatch" style="background:#FF0000"></span>010 STFT</td><td id="count_s2">0</td></tr>
+        <tr><td><span class="swatch" style="background:#FF00FF"></span>011</td><td id="count_s3">0</td></tr>
+        <tr><td><span class="swatch" style="background:#FFFF00"></span>100</td><td id="count_s4">0</td></tr>
+        <tr><td><span class="swatch" style="background:#B3B3B3"></span>101</td><td id="count_s5">0</td></tr>
+        <tr><td><span class="swatch" style="background:#4D4D4D"></span>110 TFT</td><td id="count_s6">0</td></tr>
+        <tr><td><span class="swatch" style="background:#0000FF"></span>111 AllC</td><td id="count_s7">0</td></tr>
+        <tr><td><span class="swatch" style="background:#FFB366"></span>PTFT</td><td id="count_s8">0</td></tr>
+      </table>
+    </div>
+
+    <!-- Behavior totals -->
+    <div class="panel behavior-panel">
+      <h2>Behavior totals</h2>
+      <table class="mini-table">
+        <tr><th>moves</th><th>count</th></tr>
+        <tr><td>C (cooperate)</td><td id="total_cooperated">0</td></tr>
+        <tr><td>D (defect)</td><td id="total_defected">0</td></tr>
+      </table>
+    </div>
+          </div><!-- .strategies-behavior-row -->
+    </div><!-- .right-stack -->
+
+      </div><!-- .app -->
+    </div><!-- .main-content -->
+  </div><!-- .tab-content model -->
+
+  <div class="tab-content" data-content="netlogo" role="tabpanel" id="panel-netlogo" aria-labelledby="tab-netlogo">
+    <div class="code-view"><pre><code class="language-netlogo" id="netlogoCode"></code></pre></div>
+  </div>
+
+  <div class="tab-content" data-content="javascript" role="tabpanel" id="panel-javascript" aria-labelledby="tab-javascript">
+    <div class="code-view"><pre><code class="language-javascript" id="jsCode"></code></pre></div>
+  </div>
+
+  <div class="tab-content" data-content="pseudocode" role="tabpanel" id="panel-pseudocode" aria-labelledby="tab-pseudocode">
+    <div class="code-view"><pre><code class="nohighlight" id="pseudoCode"></code></pre></div>
+  </div>
+
+  <div class="tab-content" data-content="sourcecode" role="tabpanel" id="panel-sourcecode" aria-labelledby="tab-sourcecode">
+    <div class="mobile-code-panel active" data-panel="netlogo">
+      <div class="code-view"><pre><code class="language-netlogo" id="mobileNetlogoCode"></code></pre></div>
+    </div>
+    <div class="mobile-code-panel" data-panel="javascript">
+      <div class="code-view"><pre><code class="language-javascript" id="mobileJsCode"></code></pre></div>
+    </div>
+    <div class="mobile-code-panel" data-panel="pseudocode">
+      <div class="code-view"><pre><code class="nohighlight" id="mobilePseudoCode"></code></pre></div>
+    </div>
+  </div>
+
+  <div class="tab-content" data-content="references" role="tabpanel" id="panel-references" aria-labelledby="tab-references">
+    <div class="references-view">
+      <p style="font-size: 1rem; line-height: 1.7; color: #000; margin: 0 0 32px 0;">
+        Software for an agent-based game-theoretic model of the contact hypothesis of prejudice reduction, to accompany "Modeling Prejudice Reduction," in the <em>Handbook of Computational Social Psychology</em>, adapted from <em>Public Affairs Quarterly</em> 19 (2) 2005.
+      </p>
+
+      <div class="citation-section">
+        <h2 style="display: flex; align-items: center; gap: 10px;">Citation
+          <button id="copyCitationBtn" class="copy-citation-btn" title="Copy citation">
+            <svg class="icon-copy" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            <svg class="icon-check" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </button>
+          <span id="copiedText" class="copied-text">Copied!</span>
+        </h2>
+        <div class="citation-block" id="citationText">
+          <a href="https://www.pgrim.org" target="_blank" rel="noopener noreferrer">Grim, Patrick</a>, Evan Selinger, William Braynen, Robert Rosenberger, Randy Au, Nancy Louie, and John Connolly. 2005. 
+          "Modeling Prejudice Reduction: Spatialized Game Theory and the Contact Hypothesis." 
+          <em>Public Affairs Quarterly</em> 19 (2): 95–125.
+          <br>
+          <a href="https://www.pgrim.org/articles/mprforthcomingd.pdf" target="_blank" rel="noopener noreferrer" class="pdf-link">
+            <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="12" y1="18" x2="12" y2="12"/>
+              <line x1="9" y1="15" x2="15" y2="15"/>
+            </svg>
+            Download PDF<span class="sr-only"> (opens in new tab)</span>
+          </a>
+        </div>
+      </div>
+
+      <div class="source-section">
+        <h2>Source Code</h2>
+        <ul class="repo-list">
+          <li class="repo-item">
+            <svg class="repo-icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+            </svg>
+            <div class="repo-info">
+              <div class="repo-name">GitHub</div>
+              <a href="https://github.com/wbraynen/PrejudiceReduction" target="_blank" rel="noopener noreferrer" class="repo-url">github.com/wbraynen/PrejudiceReduction<span class="sr-only"> (opens in new tab)</span></a>
+            </div>
+          </li>
+          <li class="repo-item">
+            <svg class="repo-icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="2" y1="12" x2="22" y2="12"/>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+            <div class="repo-info">
+              <div class="repo-name">CoMSES Computational Model Library</div>
+              <a href="https://www.comses.net/codebases/4c3d667f-3cc4-4738-9e09-ce1ad9c57566/releases/1.0.0/" target="_blank" rel="noopener noreferrer" class="repo-url">comses.net/codebases/4c3d667f-3cc4-4738-9e09-ce1ad9c57566<span class="sr-only"> (opens in new tab)</span></a>
+            </div>
+          </li>
+          <li class="repo-item">
+            <svg class="repo-icon" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <line x1="3" y1="9" x2="21" y2="9"/>
+              <line x1="9" y1="21" x2="9" y2="9"/>
+            </svg>
+            <div class="repo-info">
+              <div class="repo-name">NetLogo Modeling Commons</div>
+              <a href="https://modelingcommons.org/browse/one_model/7820" target="_blank" rel="noopener noreferrer" class="repo-url">modelingcommons.org/browse/one_model/7820<span class="sr-only"> (opens in new tab)</span></a>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Shared constants
+    const COPY_FEEDBACK_TIMEOUT = 700;
+
+    // Keep slider value pills in sync (pure UI)
+    const bind = (id) => {
+      const el = document.getElementById(id);
+      const out = document.getElementById(id + "_value");
+      if (!el || !out) return;
+      const update = () => out.textContent = el.value;
+      el.addEventListener("input", update);
+      update();
+    };
+    ["payoffs_cc","payoffs_cd","payoffs_dc","payoffs_dd","rounds_to_play","imitation_radius"].forEach(bind);
+
+    // Copy citation button
+    const copyCitationBtn = document.getElementById('copyCitationBtn');
+    const copiedText = document.getElementById('copiedText');
+    if (copyCitationBtn) {
+      copyCitationBtn.addEventListener('click', async () => {
+        const citationText = 'Grim, Patrick, Evan Selinger, William Braynen, Robert Rosenberger, Randy Au, Nancy Louie, and John Connolly. 2005. "Modeling Prejudice Reduction: Spatialized Game Theory and the Contact Hypothesis." Public Affairs Quarterly 19 (2): 95–125.';
+        try {
+          await navigator.clipboard.writeText(citationText);
+          copyCitationBtn.classList.add('copied');
+          if (copiedText) copiedText.classList.add('visible');
+          setTimeout(() => {
+            copyCitationBtn.classList.remove('copied');
+            if (copiedText) copiedText.classList.remove('visible');
+          }, COPY_FEEDBACK_TIMEOUT);
+        } catch (err) {
+          console.error('Failed to copy citation:', err);
+        }
+      });
+    }
+ 
+  </script>
+
+  <!-- Your NetLogo-matched JS should target the element IDs in this HTML -->
+  <script>
+// NetLogo-matching JS implementation
+// - Strategy ids: 0..7 are reactive bit strategies; 8 is PTFT
+// - Ethnicity: 0 = red, 1 = green
+// - World: torus wrapping
+// - Scoring: exact NetLogo payoff table (closed-form)
+// - Interaction: each patch plays each of 8 neighbors directionally (double-counted)
+// - Evolution: max-one-of (random tie-break) in-radius imitation_radius; adopt only if strictly higher
+
+// ----- NetLogo strategy ids (as in the NetLogo plot) -----
+const STRATEGY = {
+  ALL_D: 0,      // 000
+  SUSP_PERV: 1,  // 001
+  STFT: 2,       // 010 (Suspicious TFT)
+  S011: 3,       // 011
+  C_THEN_ALL_D: 4, // 100
+  S101: 5,       // 101
+  TFT: 6,        // 110
+  ALL_C: 7,      // 111
+  PTFT: 8        // PTFT
+};
+
+// Reactive bits for strategies 0..7 (000..111)
+const STRATEGY_BITS = {
+  0: [0, 0, 0],
+  1: [0, 0, 1],
+  2: [0, 1, 0],
+  3: [0, 1, 1],
+  4: [1, 0, 0],
+  5: [1, 0, 1],
+  6: [1, 1, 0],
+  7: [1, 1, 1]
+};
+
+// ----- NetLogo colors -----
+// NetLogo strategy-to-color:
+// 0 green, 1 cyan, 2 red, 3 magenta, 4 yellow, 5 dark gray, 6 light gray, 7 blue, 8 light orange
+const STRATEGY_COLOR = {
+  0: "#00C000", // green
+  1: "#00FFFF", // cyan
+  2: "#FF0000", // red
+  3: "#FF00FF", // magenta
+  4: "#FFFF00", // yellow
+  5: "#B3B3B3", // light gray (approx NetLogo 3)
+  6: "#4D4D4D", // dark gray (approx NetLogo 7)
+  7: "#0000FF", // blue
+  8: "#FFB366"  // light orange (approx NetLogo 27)
+};
+
+// NetLogo ethnicity-to-color: 0 red, 1 green
+const ETHNICITY_COLOR = {
+  0: "#FF0000",
+  1: "#00C000"
+};
+
+const STRATEGY_RGB = {};
+const ETHNICITY_RGB = {};
+
+function hexToRgb(hex) {
+  const cleaned = hex.replace("#", "");
+  const num = parseInt(cleaned, 16);
+  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+
+for (const [k, v] of Object.entries(STRATEGY_COLOR)) {
+  STRATEGY_RGB[k] = hexToRgb(v);
+}
+for (const [k, v] of Object.entries(ETHNICITY_COLOR)) {
+  ETHNICITY_RGB[k] = hexToRgb(v);
+}
+
+function drawLinePlot(canvas, seriesList, yMax, xSpan) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width;
+  const h = canvas.height;
+
+  const padding = { left: 36, right: 10, top: 10, bottom: 22 };
+  const plotW = w - padding.left - padding.right;
+  const plotH = h - padding.top - padding.bottom;
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = "#c9c9c9";
+  ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
+
+  const yMaxSafe = Math.max(1, yMax);
+  const yFor = (v) => padding.top + (1 - v / yMaxSafe) * plotH;
+
+  ctx.strokeStyle = "#b5b5b5";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padding.left, padding.top);
+  ctx.lineTo(padding.left, h - padding.bottom);
+  ctx.lineTo(w - padding.right, h - padding.bottom);
+  ctx.stroke();
+
+  ctx.fillStyle = "#666";
+  ctx.font = "10px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
+  ctx.fillText(String(Math.round(yMaxSafe)), 4, padding.top + 8);
+  ctx.fillText("0", 10, h - 8);
+
+  if (!seriesList.length || seriesList[0].data.length === 0) return;
+
+  const n = seriesList[0].data.length;
+  const span = Math.max(2, xSpan || n);
+  const xFor = (i) => {
+    if (span <= 1) return padding.left;
+    return padding.left + (i / (span - 1)) * plotW;
+  };
+
+  for (const series of seriesList) {
+    ctx.strokeStyle = series.color;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    series.data.forEach((v, i) => {
+      const x = xFor(i);
+      const y = yFor(v);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+}
+
+function randInt(n) {
+  return Math.floor(Math.random() * n);
+}
+
+function shufflePickOne(arr) {
+  return arr[randInt(arr.length)];
+}
+
+class Cell {
+  constructor(x, y, ethnicity, strategy) {
+    this.x = x;
+    this.y = y;
+    this.ethnicity = ethnicity; // 0 or 1
+    this.strategy = strategy;   // 0..8
+    this.newStrategy = strategy;
+
+    this.score = 0;
+    this.cooperated = 0;
+    this.defected = 0;
+  }
+
+  resetCounters() {
+    this.score = 0;
+    this.cooperated = 0;
+    this.defected = 0;
+  }
+}
+
+class Simulation {
+  constructor() {
+    // NetLogo world is 64x64 by default
+    this.gridSize = 64;
+
+    // UI state that matches NetLogo defaults:
+    this.isShowEthnicities = false; // show strategies by default
+    this.isSegregated = true;       // segregated by default
+
+    this.running = false;
+    this.generation = 0; // NetLogo ticks
+    this.lastFrameTime = 0;
+    this.accumulatorMs = 0;
+    this.rafId = 0;
+
+    // Canvas
+    this.canvas = document.getElementById("worldCanvas");
+    this.ctx = this.canvas.getContext("2d", { alpha: false });
+    this.imageData = null;
+    this.imageDataData = null;
+
+    // Plots
+    this.strategiesPlotCanvas = document.getElementById("strategiesPlot");
+    this.behaviorPlotCanvas = document.getElementById("behaviorPlot");
+
+    // Data
+    this.grid = [];
+    this.totalCooperated = 0;
+    this.totalDefected = 0;
+
+    // Optional: chart/history (keep if you want)
+    this.history = [];
+
+    // Equilibrium detection
+    this.equilibriumWindow = 10; // generations to check
+    this.equilibriumThreshold = 0.02; // 2% variance
+    this.equilibriumAnnounced = false;
+    this.recentStrategyCounts = []; // last N generations of counts
+
+    this.setupEventListeners();
+    this.reset();
+  }
+
+  // ---- Parameters from sliders (match NetLogo widgets) ----
+  get roundsToPlay() {
+    const val = parseInt(document.getElementById("rounds_to_play").value, 10);
+    return isNaN(val) ? 200 : val;
+  }
+  get imitationRadius() {
+    const val = parseFloat(document.getElementById("imitation_radius").value);
+    return isNaN(val) ? 1 : val;
+  }
+  get payoffs() {
+    const cc = parseInt(document.getElementById("payoffs_cc").value, 10);
+    const cd = parseInt(document.getElementById("payoffs_cd").value, 10);
+    const dc = parseInt(document.getElementById("payoffs_dc").value, 10);
+    const dd = parseInt(document.getElementById("payoffs_dd").value, 10);
+    return {
+      cc: isNaN(cc) ? 3 : cc,
+      cd: isNaN(cd) ? 0 : cd,
+      dc: isNaN(dc) ? 5 : dc,
+      dd: isNaN(dd) ? 1 : dd
+    };
+  }
+
+  setupEventListeners() {
+    document.getElementById("startBtn").addEventListener("click", () => this.toggleRun());
+    document.getElementById("resetBtn").addEventListener("click", () => this.reset());
+    document.getElementById("payoffsResetBtn").addEventListener("click", () => this.resetPayoffs());
+
+    document.getElementById("toggleDisplayBtn").addEventListener("click", () => {
+      this.isShowEthnicities = !this.isShowEthnicities;
+      this.draw();
+      this.updateDisplayButton();
+      this.updateDisplayModeLabel();
+    });
+
+    document.getElementById("desegregateBtn").addEventListener("click", () => {
+      this.isSegregated = !this.isSegregated;
+      this.initEthnicities(); // like NetLogo: ask patches [ init_ethnicity ]
+      this.draw();
+      this.updateSegregationButton();
+    });
+
+    // If these sliders change, NetLogo doesn't auto-reset; but web sims often do.
+    // We'll keep simulation state and just affect next steps.
+    // If you prefer, call this.reset() on changes.
+  }
+
+  resetPayoffs() {
+    const defaults = {
+      payoffs_cc: 3,
+      payoffs_cd: 0,
+      payoffs_dc: 5,
+      payoffs_dd: 1
+    };
+
+    for (const [id, value] of Object.entries(defaults)) {
+      const el = document.getElementById(id);
+      if (!el) continue;
+      el.value = String(value);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  }
+
+  reset() {
+    const wasRunning = this.running;
+    this.running = false;
+    this.lastFrameTime = 0;
+    this.accumulatorMs = 0;
+    if (this.rafId) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = 0;
+    }
+    this.generation = 0;
+    this.history = [];
+    this.recentStrategyCounts = [];
+    this.equilibriumAnnounced = false;
+
+    // Canvas sizing: draw scaled pixels, but logical grid = gridSize
+    // We'll make canvas a fixed display size via CSS; logical size stays gridSize.
+    this.canvas.width = this.gridSize;
+    this.canvas.height = this.gridSize;
+    this.imageData = this.ctx.createImageData(this.gridSize, this.gridSize);
+    this.imageDataData = this.imageData.data;
+
+    this.grid = [];
+    for (let x = 0; x < this.gridSize; x++) {
+      this.grid[x] = [];
+      for (let y = 0; y < this.gridSize; y++) {
+        // strategy = random 9 (0..8)
+        const s = randInt(9);
+
+        const ethnicity = 0;
+
+        this.grid[x][y] = new Cell(x, y, ethnicity, s);
+      }
+    }
+
+    this.totalCooperated = 0;
+    this.totalDefected = 0;
+
+    this.initEthnicities();
+    this.draw();
+    this.updateStatsUI();
+    this.renderPlots();
+    this.updateRunButton();
+    this.updateDisplayButton();
+    this.updateDisplayModeLabel();
+    this.updateSegregationButton();
+
+    // Announce setup for screen readers
+    this.announce('Grid initialized with 9 strategies randomly distributed. ' + 
+      (this.isSegregated ? 'Patches segregated by ethnicity.' : 'Patches desegregated.'));
+
+    if (wasRunning) {
+      this.running = true;
+      this.lastFrameTime = 0;
+      this.accumulatorMs = 0;
+      this.updateRunButton();
+      this.runLoop();
+    }
+  }
+
+  initEthnicities() {
+    // NetLogo init_ethnicity:
+    // if segregated: left half ethnicity 0, right half 1
+    // else random 2
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        const c = this.grid[x][y];
+        if (this.isSegregated) {
+          c.ethnicity = (x < this.gridSize / 2) ? 0 : 1;
+        } else {
+          c.ethnicity = randInt(2);
+        }
+      }
+    }
+  }
+
+  wrap(v) {
+    const n = this.gridSize;
+    return (v % n + n) % n;
+  }
+
+  cellAt(x, y) {
+    return this.grid[this.wrap(x)][this.wrap(y)];
+  }
+
+  // NetLogo neighborhood: 8 neighbors for play_with_neighbors (fixed)
+  getEightNeighborOffsets() {
+    return [
+      [ 0,  1],
+      [ 1,  1],
+      [ 1,  0],
+      [ 1, -1],
+      [ 0, -1],
+      [-1, -1],
+      [-1,  0],
+      [-1,  1]
+    ];
+  }
+
+  // NetLogo in-radius (Euclidean) for evolve; torus wrapping
+  getCellsInRadius(cx, cy, r) {
+    const res = [];
+    const R = Math.ceil(r);
+    for (let dx = -R; dx <= R; dx++) {
+      for (let dy = -R; dy <= R; dy++) {
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist <= r) {
+          res.push(this.cellAt(cx + dx, cy + dy)); // includes self (dx=0,dy=0)
+        }
+      }
+    }
+    return res;
+  }
+
+  // ----- PTFT resolution exactly like NetLogo my-strategy / neighbor-strategy -----
+  resolveMyStrategyAgainst(me, other) {
+    if (me.strategy !== STRATEGY.PTFT) return me.strategy;
+    return (me.ethnicity === other.ethnicity) ? STRATEGY.TFT : STRATEGY.ALL_D;
+  }
+
+  resolveNeighborStrategyAgainst(other, me) {
+    // "neighbor-strategy": what is the neighbor's strategy when they play me?
+    if (other.strategy !== STRATEGY.PTFT) return other.strategy;
+    return (other.ethnicity === me.ethnicity) ? STRATEGY.TFT : STRATEGY.ALL_D;
+  }
+
+  // ----- NetLogo increment_cooperated -----
+  incrementCooperated(cell, inc) {
+    const rounds = this.roundsToPlay;
+    cell.cooperated += inc;
+    cell.defected += (rounds - inc);
+  }
+
+  // ----- Exact translation of NetLogo payoff reporter -----
+  payoff(s1, s2, cell) {
+    const rounds = this.roundsToPlay;
+    const { cc, cd, dc, dd } = this.payoffs;
+
+    // Helper constants used in multiple cases
+    const quarterMix = (cc + cd + dc + dd);
+
+    // 000
+    if (s1 === 0) this.incrementCooperated(cell, 0);
+    if (s1 === 0 && s2 === 0) return rounds * dd;
+    if (s1 === 0 && s2 === 1) return dd + (rounds - 1) * dc;
+    if (s1 === 0 && s2 === 2) return rounds * dd;
+    if (s1 === 0 && s2 === 3) return dd + (rounds - 1) * dc;
+    if (s1 === 0 && s2 === 4) return dc + (rounds - 1) * dd;
+    if (s1 === 0 && s2 === 5) return rounds * dc;
+    if (s1 === 0 && s2 === 6) return dc + (rounds - 1) * dd;
+    if (s1 === 0 && s2 === 7) return rounds * dc;
+
+    // 001
+    if (s1 === 1 && s2 === 0) { this.incrementCooperated(cell, rounds - 2); return dd + (rounds - 1) * cd; }
+    if (s1 === 1 && s2 === 1) { this.incrementCooperated(cell, rounds / 2); return (rounds / 2) * dd + (rounds / 2) * cc; }
+    if (s1 === 1 && s2 === 2) { this.incrementCooperated(cell, rounds / 2); return (rounds / 4) * quarterMix; }
+    if (s1 === 1 && s2 === 3) { this.incrementCooperated(cell, 1); return dd + cc + (rounds - 2) * dc; }
+    if (s1 === 1 && s2 === 4) { this.incrementCooperated(cell, rounds - 2); return dc + dd + (rounds - 2) * cd; }
+    if (s1 === 1 && s2 === 5) { this.incrementCooperated(cell, 0); return rounds * dc; }
+    if (s1 === 1 && s2 === 6) { this.incrementCooperated(cell, rounds / 2); return (rounds / 4) * quarterMix; }
+    if (s1 === 1 && s2 === 7) { this.incrementCooperated(cell, 0); return rounds * dc; }
+
+    // 010
+    if (s1 === 2 && s2 === 0) { this.incrementCooperated(cell, 0); return rounds * dd; }
+    if (s1 === 2 && s2 === 1) { this.incrementCooperated(cell, rounds / 2); return (rounds / 4) * quarterMix; }
+    if (s1 === 2 && s2 === 2) { this.incrementCooperated(cell, 0); return rounds * dd; }
+    if (s1 === 2 && s2 === 3) { this.incrementCooperated(cell, rounds - 2); return dd + dc + (rounds - 2) * cc; }
+    if (s1 === 2 && s2 === 4) { this.incrementCooperated(cell, 1); return dc + cd + (rounds - 2) * dd; }
+    if (s1 === 2 && s2 === 5) { this.incrementCooperated(cell, rounds / 2); return (rounds / 4) * quarterMix; }
+    if (s1 === 2 && s2 === 6) { this.incrementCooperated(cell, rounds / 2); return (rounds / 2) * dc + (rounds / 2) * cd; }
+    if (s1 === 2 && s2 === 7) { this.incrementCooperated(cell, rounds - 2); return dc + (rounds - 1) * cc; }
+
+    // 011
+    if (s1 === 3) this.incrementCooperated(cell, rounds - 1);
+    if (s1 === 3 && s2 === 0) return dd + (rounds - 1) * cd;
+    if (s1 === 3 && s2 === 1) return dd + cc + (rounds - 2) * cd;
+    if (s1 === 3 && s2 === 2) return dd + cd + (rounds - 2) * cc;
+    if (s1 === 3 && s2 === 3) return dd + (rounds - 1) * cc;
+    if (s1 === 3 && s2 === 4) return dc + (rounds - 1) * cd;
+    if (s1 === 3 && s2 === 5) return dc + cc + (rounds - 2) * cd;
+    if (s1 === 3 && s2 === 6) return dc + cd + (rounds - 2) * cc;
+    if (s1 === 3 && s2 === 7) return dc + (rounds - 1) * cc;
+
+    // 100
+    if (s1 === 4) this.incrementCooperated(cell, 1);
+    if (s1 === 4 && s2 === 0) return cd + (rounds - 1) * dd;
+    if (s1 === 4 && s2 === 1) return cd + dd + (rounds - 2) * dc;
+    if (s1 === 4 && s2 === 2) return cd + dc + (rounds - 2) * dd;
+    if (s1 === 4 && s2 === 3) return cd + (rounds - 1) * dc;
+    if (s1 === 4 && s2 === 4) return cc + (rounds - 1) * dd;
+    if (s1 === 4 && s2 === 5) return cc + dd + (rounds - 2) * dc;
+    if (s1 === 4 && s2 === 6) return cc + dc + (rounds - 2) * dd;
+    if (s1 === 4 && s2 === 7) return cc + (rounds - 1) * dc;
+
+    // 101
+    if (s1 === 5 && s2 === 0) { this.incrementCooperated(cell, rounds); return rounds * cd; }
+    if (s1 === 5 && s2 === 1) { this.incrementCooperated(cell, rounds); return rounds * cd; }
+    if (s1 === 5 && s2 === 2) { this.incrementCooperated(cell, rounds / 2); return (rounds / 4) * quarterMix; }
+    if (s1 === 5 && s2 === 3) { this.incrementCooperated(cell, 2); return cd + cc + (rounds - 2) * dc; }
+    if (s1 === 5 && s2 === 4) { this.incrementCooperated(cell, rounds - 2); return cc + dd + (rounds - 2) * cd; }
+    if (s1 === 5 && s2 === 5) { this.incrementCooperated(cell, rounds / 2); return (rounds / 2) * cc + (rounds / 2) * dd; }
+    if (s1 === 5 && s2 === 6) { this.incrementCooperated(cell, rounds / 2); return (rounds / 4) * quarterMix; }
+    if (s1 === 5 && s2 === 7) { this.incrementCooperated(cell, 1); return cc + (rounds - 1) * dc; }
+
+    // 110
+    if (s1 === 6 && s2 === 0) { this.incrementCooperated(cell, 1); return cd + (rounds - 1) * dd; }
+    if (s1 === 6 && s2 === 1) { this.incrementCooperated(cell, rounds / 2); return (rounds / 4) * quarterMix; }
+    if (s1 === 6 && s2 === 2) { this.incrementCooperated(cell, rounds / 2); return (rounds / 2) * cd + (rounds / 2) * dc; }
+    if (s1 === 6 && s2 === 3) { this.incrementCooperated(cell, rounds - 1); return cd + dc + (rounds - 2) * cc; }
+    if (s1 === 6 && s2 === 4) { this.incrementCooperated(cell, 2); return cc + cd + (rounds - 2) * dd; }
+    if (s1 === 6 && s2 === 5) { this.incrementCooperated(cell, rounds / 2); return (rounds / 4) * quarterMix; }
+    if (s1 === 6 && s2 === 6) { this.incrementCooperated(cell, rounds); return rounds * cc; }
+    if (s1 === 6 && s2 === 7) { this.incrementCooperated(cell, rounds); return rounds * cc; }
+
+    // 111
+    if (s1 === 7) this.incrementCooperated(cell, rounds);
+    if (s1 === 7 && s2 === 0) return rounds * cd;
+    if (s1 === 7 && s2 === 1) return rounds * cd;
+    if (s1 === 7 && s2 === 2) return cd + (rounds - 1) * cc;
+    if (s1 === 7 && s2 === 3) return cd + (rounds - 1) * cc;
+    if (s1 === 7 && s2 === 4) return cc + (rounds - 1) * cd;
+    if (s1 === 7 && s2 === 5) return cc + (rounds - 1) * cd;
+    if (s1 === 7 && s2 === 6) return rounds * cc;
+    if (s1 === 7 && s2 === 7) return rounds * cc;
+
+    // Should never happen because PTFT is resolved before payoff
+    return 0;
+  }
+
+  // One directional interaction: "me plays neighbor"
+  playWithNeighbor(me, neighbor) {
+    const s1 = this.resolveMyStrategyAgainst(me, neighbor);
+    const s2 = this.resolveNeighborStrategyAgainst(neighbor, me);
+    return this.payoff(s1, s2, me);
+  }
+
+  step() {
+    // NetLogo: ask patches [ play_with_neighbors ]
+    // Each patch resets its counters and sums payoff vs 8 neighbors
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        this.grid[x][y].resetCounters();
+      }
+    }
+
+    const offsets = this.getEightNeighborOffsets();
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        const me = this.grid[x][y];
+        let sum = 0;
+        for (const [dx, dy] of offsets) {
+          const nb = this.cellAt(x + dx, y + dy);
+          sum += this.playWithNeighbor(me, nb);
+        }
+        me.score = sum;
+      }
+    }
+
+    // NetLogo: ask patches [ evolve ]
+    // fittest-neighbor = max-one-of (patches in-radius imitation_radius) [score]
+    // if score < [score] of fittest-neighbor -> copy its strategy else keep own
+    const r = this.imitationRadius;
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        const me = this.grid[x][y];
+        const neighborhood = this.getCellsInRadius(x, y, r);
+
+        let maxScore = -Infinity;
+        for (const c of neighborhood) maxScore = Math.max(maxScore, c.score);
+
+        // random tie-break like NetLogo max-one-of
+        const best = shufflePickOne(neighborhood.filter(c => c.score === maxScore));
+
+        me.newStrategy = (me.score < best.score) ? best.strategy : me.strategy;
+      }
+    }
+
+    // NetLogo: ask patches [ set strategy new_strategy ]
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        this.grid[x][y].strategy = this.grid[x][y].newStrategy;
+      }
+    }
+
+    // NetLogo: init-global-counters + ask patches [ count-total-cooperated ]
+    this.totalCooperated = 0;
+    this.totalDefected = 0;
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        const c = this.grid[x][y];
+        this.totalCooperated += c.cooperated;
+        this.totalDefected += c.defected;
+      }
+    }
+
+    this.generation++;
+    this.draw();
+    this.updateStatsUI();
+    this.updateHistory(); // optional chart
+    this.renderPlots();
+    this.trackEquilibrium();
+  }
+
+  // Track strategy counts for equilibrium detection
+  trackEquilibrium() {
+    const counts = new Array(9).fill(0);
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        counts[this.grid[x][y].strategy]++;
+      }
+    }
+
+    this.recentStrategyCounts.push(counts);
+    if (this.recentStrategyCounts.length > this.equilibriumWindow) {
+      this.recentStrategyCounts.shift();
+    }
+
+    if (this.checkEquilibrium()) {
+      this.announceEquilibrium();
+    }
+  }
+
+  draw() {
+    // Draw either strategies or ethnicities, like NetLogo display-agents
+    const data = this.imageDataData;
+    const size = this.gridSize;
+    const palette = this.isShowEthnicities ? ETHNICITY_RGB : STRATEGY_RGB;
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        const c = this.grid[x][y];
+        const rgb = this.isShowEthnicities
+          ? palette[c.ethnicity]
+          : palette[c.strategy];
+        const i = (y * size + x) * 4;
+        data[i] = rgb[0];
+        data[i + 1] = rgb[1];
+        data[i + 2] = rgb[2];
+        data[i + 3] = 255;
+      }
+    }
+    this.ctx.putImageData(this.imageData, 0, 0);
+  }
+
+  updateStatsUI() {
+    // Match NetLogo’s semantics: plots show COUNTS, behavior shows totals
+    const counts = new Array(9).fill(0);
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        counts[this.grid[x][y].strategy]++;
+      }
+    }
+
+    const setText = (id, v) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = String(v);
+    };
+
+    setText("ticks", this.generation);
+
+    // Strategy counts (like NetLogo plot pens)
+    setText("count_s0", counts[0]);
+    setText("count_s1", counts[1]);
+    setText("count_s2", counts[2]);
+    setText("count_s3", counts[3]);
+    setText("count_s4", counts[4]);
+    setText("count_s5", counts[5]);
+    setText("count_s6", counts[6]);
+    setText("count_s7", counts[7]);
+    setText("count_s8", counts[8]);
+
+    // Behavior totals (like NetLogo Behavior plot)
+    setText("total_cooperated", this.totalCooperated);
+    setText("total_defected", this.totalDefected);
+  }
+
+  updateHistory() {
+    // Optional: keep history in counts like NetLogo plots (not percents)
+    const counts = new Array(9).fill(0);
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        counts[this.grid[x][y].strategy]++;
+      }
+    }
+
+    this.history.push({
+      tick: this.generation,
+      strategies: counts,
+      cooperated: this.totalCooperated,
+      defected: this.totalDefected
+    });
+  }
+
+  renderPlots() {
+    if (!this.history.length) {
+      drawLinePlot(this.strategiesPlotCanvas, [], this.gridSize * this.gridSize, 30);
+      drawLinePlot(this.behaviorPlotCanvas, [], 7000000, 30);
+      return;
+    }
+
+    const strategySeries = [];
+    for (let i = 0; i < 9; i++) {
+      strategySeries.push({
+        color: STRATEGY_COLOR[i],
+        data: this.history.map(h => h.strategies[i])
+      });
+    }
+    const maxStrategies = this.gridSize * this.gridSize;
+    const span = Math.max(30, this.history.length);
+    drawLinePlot(this.strategiesPlotCanvas, strategySeries, maxStrategies, span);
+
+    const behaviorSeries = [
+      { color: "#2e7d32", data: this.history.map(h => h.cooperated) },
+      { color: "#c62828", data: this.history.map(h => h.defected) }
+    ];
+    let maxBehavior = 7000000;
+    for (const h of this.history) {
+      if (h.cooperated > maxBehavior) maxBehavior = h.cooperated;
+      if (h.defected > maxBehavior) maxBehavior = h.defected;
+    }
+    drawLinePlot(this.behaviorPlotCanvas, behaviorSeries, Math.ceil(maxBehavior * 1.05), span);
+  }
+
+  start() {
+    if (this.running) return;
+    // Don't start if already at rounds limit
+    if (this.generation >= this.roundsToPlay) {
+      this.announce(`Already at ${this.generation} rounds. Increase rounds to play or reset.`);
+      return;
+    }
+    this.running = true;
+    this.lastFrameTime = 0;
+    this.accumulatorMs = 0;
+    this.announce('Simulation running');
+    this.runLoop();
+  }
+
+  pause() {
+    this.running = false;
+    this.announce(`Paused at round ${this.generation}`);
+  }
+
+  // Screen reader announcement helper
+  announce(message) {
+    const el = document.getElementById('srAnnounce');
+    if (el) {
+      el.textContent = '';
+      // Small delay to ensure screen reader picks up the change
+      setTimeout(() => { el.textContent = message; }, 50);
+    }
+  }
+
+  // Check if equilibrium has been reached
+  checkEquilibrium() {
+    if (this.equilibriumAnnounced) return false;
+    if (this.generation < this.equilibriumWindow) return false;
+    if (this.recentStrategyCounts.length < this.equilibriumWindow) return false;
+
+    const gridTotal = this.gridSize * this.gridSize;
+    const threshold = gridTotal * this.equilibriumThreshold;
+
+    // Check variance for each strategy
+    for (let s = 0; s < 9; s++) {
+      let min = Infinity, max = -Infinity;
+      for (const counts of this.recentStrategyCounts) {
+        min = Math.min(min, counts[s]);
+        max = Math.max(max, counts[s]);
+      }
+      if (max - min > threshold) return false;
+    }
+
+    return true;
+  }
+
+  // Get summary of current state for announcements
+  getStateSummary() {
+    const counts = new Array(9).fill(0);
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        counts[this.grid[x][y].strategy]++;
+      }
+    }
+
+    const names = ['AllD', '001', 'STFT', '011', '100', '101', 'TFT', 'AllC', 'PTFT'];
+    
+    // Sort by count descending
+    const sorted = counts
+      .map((count, idx) => ({ name: names[idx], count }))
+      .filter(s => s.count > 0)
+      .sort((a, b) => b.count - a.count);
+
+    // Build summary of top strategies (those with > 5% of grid)
+    const threshold = this.gridSize * this.gridSize * 0.05;
+    const dominant = sorted.filter(s => s.count >= threshold);
+    
+    let summary = `Round ${this.generation}. `;
+    
+    if (dominant.length === 1) {
+      summary += `${dominant[0].name} dominates with ${dominant[0].count.toLocaleString()} patches. `;
+    } else if (dominant.length > 0) {
+      summary += dominant.map(s => `${s.name}: ${s.count.toLocaleString()} patches`).join(', ') + '. ';
+    }
+
+    // Add behavior summary
+    const total = this.totalCooperated + this.totalDefected;
+    if (total > 0) {
+      const coopPct = Math.round(100 * this.totalCooperated / total);
+      if (coopPct > 60) {
+        summary += `Cooperation dominates at ${coopPct}%.`;
+      } else if (coopPct < 40) {
+        summary += `Defection dominates at ${100 - coopPct}%.`;
+      } else {
+        summary += `Cooperation and defection roughly balanced.`;
+      }
+    }
+
+    return summary;
+  }
+
+  announceEquilibrium() {
+    if (this.equilibriumAnnounced) return;
+    this.equilibriumAnnounced = true;
+    
+    const summary = this.getStateSummary();
+    this.announce('Equilibrium reached. ' + summary);
+  }
+
+  toggleRun() {
+    if (this.running) this.pause();
+    else this.start();
+    this.updateRunButton();
+  }
+
+  updateRunButton() {
+    const btn = document.getElementById("startBtn");
+    if (!btn) return;
+    btn.textContent = this.running ? "pause" : "go";
+    btn.title = this.running ? "Pause" : "NetLogo: go";
+  }
+
+  updateDisplayButton() {
+    const btn = document.getElementById("toggleDisplayBtn");
+    if (!btn) return;
+    btn.textContent = this.isShowEthnicities ? "show strategies" : "show \"ethnicities\"";
+  }
+
+  updateDisplayModeLabel() {
+    const label = document.getElementById("displayMode");
+    if (!label) return;
+    label.textContent = this.isShowEthnicities
+      ? "Displaying \"ethnicities\""
+      : "Displaying strategies";
+  }
+
+  updateSegregationButton() {
+    const btn = document.getElementById("desegregateBtn");
+    if (!btn) return;
+    btn.textContent = this.isSegregated ? "desegregate" : "segregate";
+  }
+
+  runLoop(timestamp) {
+    if (!this.running) return;
+
+    if (!timestamp) {
+      this.rafId = requestAnimationFrame((t) => this.runLoop(t));
+      return;
+    }
+
+    if (!this.lastFrameTime) {
+      this.lastFrameTime = timestamp;
+    }
+
+    const delta = timestamp - this.lastFrameTime;
+    this.lastFrameTime = timestamp;
+    this.accumulatorMs += delta;
+
+    const stepMs = 300;
+    while (this.accumulatorMs >= stepMs) {
+      // Stop if we've reached rounds_to_play generations
+      if (this.generation >= this.roundsToPlay) {
+        this.running = false;
+        this.updateRunButton();
+        const summary = this.getStateSummary();
+        this.announce(`Simulation complete. ${summary}`);
+        return;
+      }
+      try {
+        this.step();
+      } catch (e) {
+        console.error('Simulation step error:', e);
+      }
+      this.accumulatorMs -= stepMs;
+    }
+
+    this.rafId = requestAnimationFrame((t) => this.runLoop(t));
+  }
+}
+
+// Initialize
+const sim = new Simulation();
+
+</script>
+
+<script>
+// Tab switching
+(function() {
+  const tabs = document.querySelectorAll('.tab-btn');
+  const contents = document.querySelectorAll('.tab-content');
+  const copyBar = document.getElementById('copyBar');
+  const copyBtn = document.getElementById('copyBtn');
+
+  const codeTabIds = ['netlogo', 'javascript', 'pseudocode', 'sourcecode'];
+  const codeElementMap = {
+    'netlogo': 'netlogoCode',
+    'javascript': 'jsCode',
+    'pseudocode': 'pseudoCode'
+  };
+
+  // Track active segment for mobile
+  let activeSegment = 'netlogo';
+
+  function updateCopyBarVisibility(tabId) {
+    if (codeTabIds.includes(tabId)) {
+      copyBar.classList.add('visible');
+      // Show segmented control only for mobile sourcecode tab
+      if (tabId === 'sourcecode') {
+        copyBar.classList.add('sourcecode-active');
+        // Reinitialize segment indicator position after element becomes visible
+        requestAnimationFrame(() => {
+          const activeIndex = Array.from(segmentBtns).findIndex(b => b.classList.contains('active'));
+          updateSegmentIndicator(activeIndex >= 0 ? activeIndex : 0, false);
+        });
+      } else {
+        copyBar.classList.remove('sourcecode-active');
+      }
+    } else {
+      copyBar.classList.remove('visible');
+      copyBar.classList.remove('sourcecode-active');
+      // Clear all inline styles from segment indicator
+      const indicator = document.getElementById('segmentIndicator');
+      if (indicator) {
+        indicator.removeAttribute('style');
+      }
+      // Reset to first segment (NetLogo)
+      segmentBtns.forEach((b, i) => {
+        b.classList.toggle('active', i === 0);
+        b.setAttribute('aria-selected', i === 0 ? 'true' : 'false');
+      });
+      mobilePanels.forEach(p => {
+        p.classList.toggle('active', p.dataset.panel === 'netlogo');
+      });
+      activeSegment = 'netlogo';
+    }
+  }
+
+  // Populate mobile code panels with same content as desktop
+  let mobileCodePopulated = false;
+  function populateMobileCode() {
+    if (mobileCodePopulated) return;
+    mobileCodePopulated = true;
+    
+    const netlogoCode = document.getElementById('netlogoCode');
+    const jsCode = document.getElementById('jsCode');
+    const pseudoCode = document.getElementById('pseudoCode');
+    const mobileNetlogo = document.getElementById('mobileNetlogoCode');
+    const mobileJs = document.getElementById('mobileJsCode');
+    const mobilePseudo = document.getElementById('mobilePseudoCode');
+    
+    if (netlogoCode && mobileNetlogo) mobileNetlogo.textContent = netlogoCode.textContent;
+    if (jsCode && mobileJs) mobileJs.textContent = jsCode.textContent;
+    if (pseudoCode && mobilePseudo) mobilePseudo.innerHTML = pseudoCode.innerHTML;
+    
+    // Apply syntax highlighting to mobile code elements
+    // Remove data-highlighted attribute in case hljs.highlightAll() marked empty elements
+    if (window.hljs) {
+      [mobileNetlogo, mobileJs].forEach(el => {
+        if (el) {
+          el.removeAttribute('data-highlighted');
+          hljs.highlightElement(el);
+        }
+      });
+    }
+  }
+
+  // Setup segmented control for mobile source code (iOS-style sliding)
+  const segmentBtns = document.querySelectorAll('.segment-btn');
+  const mobilePanels = document.querySelectorAll('.mobile-code-panel');
+  const segmentIndicator = document.getElementById('segmentIndicator');
+  const segmentedControl = document.getElementById('mobileSegmentedControl');
+
+  // Position the sliding indicator
+  function updateSegmentIndicator(index, animate = true) {
+    const btn = segmentBtns[index];
+    if (!btn) return;
+    segmentIndicator.style.width = `${btn.offsetWidth}px`;
+    segmentIndicator.style.left = `${btn.offsetLeft}px`;
+    if (!animate) {
+      segmentIndicator.style.transition = 'none';
+      // Force reflow to apply no-transition immediately
+      segmentIndicator.offsetHeight;
+      segmentIndicator.style.transition = '';
+    }
+  }
+
+  // Indicator will be positioned when sourcecode tab is activated
+
+  segmentBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      segmentBtns.forEach(b => {
+        b.classList.remove('active');
+        b.setAttribute('aria-selected', 'false');
+      });
+      mobilePanels.forEach(p => p.classList.remove('active'));
+      
+      btn.classList.add('active');
+      btn.setAttribute('aria-selected', 'true');
+      activeSegment = btn.dataset.segment;
+      
+      // Slide indicator to active button
+      updateSegmentIndicator(parseInt(btn.dataset.index));
+      
+      document.querySelector(`.mobile-code-panel[data-panel="${activeSegment}"]`).classList.add('active');
+    });
+  });
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => {
+        t.classList.remove('active');
+        t.setAttribute('aria-selected', 'false');
+      });
+      contents.forEach(c => c.classList.remove('active'));
+      tab.classList.add('active');
+      tab.setAttribute('aria-selected', 'true');
+      document.querySelector(`.tab-content[data-content="${tab.dataset.tab}"]`).classList.add('active');
+      updateCopyBarVisibility(tab.dataset.tab);
+      
+      // Populate mobile code on first visit to sourcecode tab
+      if (tab.dataset.tab === 'sourcecode') {
+        populateMobileCode();
+      }
+    });
+
+    // Keyboard navigation for tabs
+    tab.addEventListener('keydown', (e) => {
+      // Only navigate among visible tabs
+      const visibleTabs = Array.from(tabs).filter(t => t.offsetParent !== null);
+      const currentIndex = visibleTabs.indexOf(tab);
+      let newIndex;
+
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        newIndex = (currentIndex + 1) % visibleTabs.length;
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        newIndex = (currentIndex - 1 + visibleTabs.length) % visibleTabs.length;
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        newIndex = 0;
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        newIndex = visibleTabs.length - 1;
+      }
+
+      if (newIndex !== undefined) {
+        visibleTabs[newIndex].focus();
+        visibleTabs[newIndex].click();
+      }
+    });
+  });
+
+  copyBtn.addEventListener('click', () => {
+    const activeTab = document.querySelector('.tab-btn.active');
+    let tabId = activeTab ? activeTab.dataset.tab : null;
+    const srAnnounce = document.getElementById('srAnnounce');
+    const codeCopiedText = document.getElementById('codeCopiedText');
+    
+    // If on mobile sourcecode tab, use the active segment
+    if (tabId === 'sourcecode') {
+      tabId = activeSegment;
+    }
+    
+    const codeElementId = codeElementMap[tabId];
+    
+    if (codeElementId) {
+      const codeElement = document.getElementById(codeElementId);
+      if (codeElement) {
+        let textToCopy = codeElement.textContent;
+        
+        // Append NetLogo metadata when copying from the NetLogo tab
+        if (tabId === 'netlogo') {
+          textToCopy += NETLOGO_METADATA;
+        }
+        
+        navigator.clipboard.writeText(textToCopy).then(() => {
+          copyBtn.classList.add('copied');
+          if (codeCopiedText) codeCopiedText.classList.add('visible');
+          srAnnounce.textContent = 'Copied to clipboard';
+          setTimeout(() => {
+            copyBtn.classList.remove('copied');
+            if (codeCopiedText) codeCopiedText.classList.remove('visible');
+            srAnnounce.textContent = '';
+          }, COPY_FEEDBACK_TIMEOUT);
+        }).catch(err => {
+          console.error('Failed to copy:', err);
+        });
+      }
+    }
+  });
+
+  // NetLogo file metadata (GUI definitions, shapes, etc.)
+  const NETLOGO_METADATA = `
+@#$#@#$#@
+GRAPHICS-WINDOW
+259
+14
+724
+500
+-1
+-1
+7.0
+1
+10
+1
+1
+1
+0
+1
+1
+1
+-32
+32
+-32
+32
+0
+0
+1
+ticks
+30.0
+
+BUTTON
+53
+29
+116
+62
+NIL
+setup
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+163
+30
+226
+63
+NIL
+go
+T
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+SLIDER
+759
+14
+931
+47
+payoffs_cc
+payoffs_cc
+0
+10
+3.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+760
+50
+932
+83
+payoffs_cd
+payoffs_cd
+0
+10
+0.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+761
+86
+933
+119
+payoffs_dc
+payoffs_dc
+0
+10
+5.0
+1
+1
+NIL
+HORIZONTAL
+
+SLIDER
+762
+123
+934
+156
+payoffs_dd
+payoffs_dd
+0
+10
+1.0
+1
+1
+NIL
+HORIZONTAL
+
+PLOT
+761
+170
+961
+369
+Strategies
+tick
+strategies
+0.0
+30.0
+0.0
+5000.0
+true
+true
+"" ""
+PENS
+"000 AllD" 1.0 0 -10899396 true "" ""
+"001" 1.0 0 -11221820 true "" ""
+"010 STFT" 1.0 0 -2674135 true "" ""
+"011" 1.0 0 -5825686 true "" ""
+"100" 1.0 0 -1184463 true "" ""
+"101" 1.0 0 -4539718 true "" ""
+"110 TFT" 1.0 0 -11053225 true "" ""
+"111 AllC" 1.0 0 -13345367 true "" ""
+"PTFT" 1.0 0 -612749 true "" ""
+
+PLOT
+761
+375
+961
+525
+Behavior
+tick
+moves
+0.0
+30.0
+0.0
+3000000.0
+true
+true
+"" ""
+PENS
+"C" 1.0 0 -13345367 true "" ""
+"D" 1.0 0 -10899396 true "" ""
+
+SLIDER
+52
+415
+224
+448
+rounds_to_play
+rounds_to_play
+4
+200
+200.0
+4
+1
+NIL
+HORIZONTAL
+
+SLIDER
+54
+370
+232
+403
+imitation_radius
+imitation_radius
+1
+3
+1.5
+0.5
+1
+agents
+HORIZONTAL
+
+BUTTON
+86
+187
+197
+220
+(de)segragate
+desegregate
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+BUTTON
+88
+147
+196
+180
+toggle display
+show_ethnicities
+NIL
+1
+T
+OBSERVER
+NIL
+NIL
+NIL
+NIL
+1
+
+@#$#@#$#@
+## WHAT IS IT?
+
+This is an agent-based model of neighbor interactions which uses evolutionary game-theory.  It has implications for biology, sociology, social psychology, and social and political philosophy.
+
+## HOW IT WORKS
+
+Agents (the little squares that don't go anywhere) are born with one of eight possible reactive strategies.  Which strategy they get is determined purely by chance. interact with their neighbors one at a time, sum up the points they get from these interactions, and then see if any of their neighbors did better than they did.
+
+## HOW TO USE IT
+
+This section could explain how to use the model, including a description of each of the items in the interface tab.
+
+## THINGS TO NOTICE
+
+Notice that with default payoff values (Axelrod's prisoner's dilemma payoffs of 0,1,3,5), tit-for-tat (TFT) wins out.
+
+## THINGS TO TRY
+
+This section could give some ideas of things for the user to try to do (move sliders, switches, etc.) with the model.
+
+## EXTENDING THE MODEL
+
+This section could give some ideas of things to add or change in the procedures tab to make the model more complicated, detailed, accurate, etc.
+
+## NETLOGO FEATURES
+
+This section could point out any especially interesting or unusual features of NetLogo that the model makes use of, particularly in the Procedures tab.  It might also point out places where workarounds were needed because of missing features.
+
+## RELATED MODELS
+
+This section could give the names of models in the NetLogo Models Library or elsewhere which are of related interest.
+
+## CREDITS AND REFERENCES
+
+Patrick Grim, "The Greater Generosity of the Spatialized Prisoner's Dilemma," Journal of Theoretical Biology 173 (1995), 353-359
+
+Patrick Grim, "Spatialization and Greater Generosity in the Stochastic Prisoner's Dilemma," BioSystems 37 (1996), 3-17.
+
+Patrick Grim, Gary Mar, and Paul St. Denis, The Philosophical Computer.  MIT Press, 1998.
+
+http://www.sunysb.edu/philosophy/faculty/pgrim/index.html  
+http://www.computationalphilosophy.org/
+
+This NetLogo code was written by Will Braynen (July 2007)
+Ported to NetLogo 7.0.3 (January 2026)
+@#$#@#$#@
+default
+true
+0
+Polygon -7500403 true true 150 5 40 250 150 205 260 250
+
+airplane
+true
+0
+Polygon -7500403 true true 150 0 135 15 120 60 120 105 15 165 15 195 120 180 135 240 105 270 120 285 150 270 180 285 210 270 165 240 180 180 285 195 285 165 180 105 180 60 165 15
+
+arrow
+true
+0
+Polygon -7500403 true true 150 0 0 150 105 150 105 293 195 293 195 150 300 150
+
+box
+false
+0
+Polygon -7500403 true true 150 285 285 225 285 75 150 135
+Polygon -7500403 true true 150 135 15 75 150 15 285 75
+Polygon -7500403 true true 15 75 15 225 150 285 150 135
+Line -16777216 false 150 285 150 135
+Line -16777216 false 150 135 15 75
+Line -16777216 false 150 135 285 75
+
+bug
+true
+0
+Circle -7500403 true true 96 182 108
+Circle -7500403 true true 110 127 80
+Circle -7500403 true true 110 75 80
+Line -7500403 true 150 100 80 30
+Line -7500403 true 150 100 220 30
+
+butterfly
+true
+0
+Polygon -7500403 true true 150 165 209 199 225 225 225 255 195 270 165 255 150 240
+Polygon -7500403 true true 150 165 89 198 75 225 75 255 105 270 135 255 150 240
+Polygon -7500403 true true 139 148 100 105 55 90 25 90 10 105 10 135 25 180 40 195 85 194 139 163
+Polygon -7500403 true true 162 150 200 105 245 90 275 90 290 105 290 135 275 180 260 195 215 195 162 165
+Polygon -16777216 true false 150 255 135 225 120 150 135 120 150 105 165 120 180 150 165 225
+Circle -16777216 true false 135 90 30
+Line -16777216 false 150 105 195 60
+Line -16777216 false 150 105 105 60
+
+car
+false
+0
+Polygon -7500403 true true 300 180 279 164 261 144 240 135 226 132 213 106 203 84 185 63 159 50 135 50 75 60 0 150 0 165 0 225 300 225 300 180
+Circle -16777216 true false 180 180 90
+Circle -16777216 true false 30 180 90
+Polygon -16777216 true false 162 80 132 78 134 135 209 135 194 105 189 96 180 89
+Circle -7500403 true true 47 195 58
+Circle -7500403 true true 195 195 58
+
+circle
+false
+0
+Circle -7500403 true true 0 0 300
+
+circle 2
+false
+0
+Circle -7500403 true true 0 0 300
+Circle -16777216 true false 30 30 240
+
+cow
+false
+0
+Polygon -7500403 true true 200 193 197 249 179 249 177 196 166 187 140 189 93 191 78 179 72 211 49 209 48 181 37 149 25 120 25 89 45 72 103 84 179 75 198 76 252 64 272 81 293 103 285 121 255 121 242 118 224 167
+Polygon -7500403 true true 73 210 86 251 62 249 48 208
+Polygon -7500403 true true 25 114 16 195 9 204 23 213 25 200 39 123
+
+cylinder
+false
+0
+Circle -7500403 true true 0 0 300
+
+dot
+false
+0
+Circle -7500403 true true 90 90 120
+
+face happy
+false
+0
+Circle -7500403 true true 8 8 285
+Circle -16777216 true false 60 75 60
+Circle -16777216 true false 180 75 60
+Polygon -16777216 true false 150 255 90 239 62 213 47 191 67 179 90 203 109 218 150 225 192 218 210 203 227 181 251 194 236 217 212 240
+
+face neutral
+false
+0
+Circle -7500403 true true 8 7 285
+Circle -16777216 true false 60 75 60
+Circle -16777216 true false 180 75 60
+Rectangle -16777216 true false 60 195 240 225
+
+face sad
+false
+0
+Circle -7500403 true true 8 8 285
+Circle -16777216 true false 60 75 60
+Circle -16777216 true false 180 75 60
+Polygon -16777216 true false 150 168 90 184 62 210 47 232 67 244 90 220 109 205 150 198 192 205 210 220 227 242 251 229 236 206 212 183
+
+fish
+false
+0
+Polygon -1 true false 44 131 21 87 15 86 0 120 15 150 0 180 13 214 20 212 45 166
+Polygon -1 true false 135 195 119 235 95 218 76 210 46 204 60 165
+Polygon -1 true false 75 45 83 77 71 103 86 114 166 78 135 60
+Polygon -7500403 true true 30 136 151 77 226 81 280 119 292 146 292 160 287 170 270 195 195 210 151 212 30 166
+Circle -16777216 true false 215 106 30
+
+flag
+false
+0
+Rectangle -7500403 true true 60 15 75 300
+Polygon -7500403 true true 90 150 270 90 90 30
+Line -7500403 true 75 135 90 135
+Line -7500403 true 75 45 90 45
+
+flower
+false
+0
+Polygon -10899396 true false 135 120 165 165 180 210 180 240 150 300 165 300 195 240 195 195 165 135
+Circle -7500403 true true 85 132 38
+Circle -7500403 true true 130 147 38
+Circle -7500403 true true 192 85 38
+Circle -7500403 true true 85 40 38
+Circle -7500403 true true 177 40 38
+Circle -7500403 true true 177 132 38
+Circle -7500403 true true 70 85 38
+Circle -7500403 true true 130 25 38
+Circle -7500403 true true 96 51 108
+Circle -16777216 true false 113 68 74
+Polygon -10899396 true false 189 233 219 188 249 173 279 188 234 218
+Polygon -10899396 true false 180 255 150 210 105 210 75 240 135 240
+
+house
+false
+0
+Rectangle -7500403 true true 45 120 255 285
+Rectangle -16777216 true false 120 210 180 285
+Polygon -7500403 true true 15 120 150 15 285 120
+Line -16777216 false 30 120 270 120
+
+leaf
+false
+0
+Polygon -7500403 true true 150 210 135 195 120 210 60 210 30 195 60 180 60 165 15 135 30 120 15 105 40 104 45 90 60 90 90 105 105 120 120 120 105 60 120 60 135 30 150 15 165 30 180 60 195 60 180 120 195 120 210 105 240 90 255 90 263 104 285 105 270 120 285 135 240 165 240 180 270 195 240 210 180 210 165 195
+Polygon -7500403 true true 135 195 135 240 120 255 105 255 105 285 135 285 165 240 165 195
+
+line
+true
+0
+Line -7500403 true 150 0 150 300
+
+line half
+true
+0
+Line -7500403 true 150 0 150 150
+
+link
+true
+0
+Line -7500403 true 150 0 150 300
+
+link direction
+true
+0
+Line -7500403 true 150 150 30 225
+Line -7500403 true 150 150 270 225
+
+pentagon
+false
+0
+Polygon -7500403 true true 150 15 15 120 60 285 240 285 285 120
+
+person
+false
+0
+Circle -7500403 true true 110 5 80
+Polygon -7500403 true true 105 90 120 195 90 285 105 300 135 300 150 225 165 300 195 300 210 285 180 195 195 90
+Rectangle -7500403 true true 127 79 172 94
+Polygon -7500403 true true 195 90 240 150 225 180 165 105
+Polygon -7500403 true true 105 90 60 150 75 180 135 105
+
+plant
+false
+0
+Rectangle -7500403 true true 135 90 165 300
+Polygon -7500403 true true 135 255 90 210 45 195 75 255 135 285
+Polygon -7500403 true true 165 255 210 210 255 195 225 255 165 285
+Polygon -7500403 true true 135 180 90 135 45 120 75 180 135 210
+Polygon -7500403 true true 165 180 165 210 225 180 255 120 210 135
+Polygon -7500403 true true 135 105 90 60 45 45 75 105 135 135
+Polygon -7500403 true true 165 105 165 135 225 105 255 45 210 60
+Polygon -7500403 true true 135 90 120 45 150 15 180 45 165 90
+
+square
+false
+0
+Rectangle -7500403 true true 30 30 270 270
+
+square 2
+false
+0
+Rectangle -7500403 true true 30 30 270 270
+Rectangle -16777216 true false 60 60 240 240
+
+star
+false
+0
+Polygon -7500403 true true 151 1 185 108 298 108 207 175 242 282 151 216 59 282 94 175 3 108 116 108
+
+target
+false
+0
+Circle -7500403 true true 0 0 300
+Circle -16777216 true false 30 30 240
+Circle -7500403 true true 60 60 180
+Circle -16777216 true false 90 90 120
+Circle -7500403 true true 120 120 60
+
+tree
+false
+0
+Circle -7500403 true true 118 3 94
+Rectangle -6459832 true false 120 195 180 300
+Circle -7500403 true true 65 21 108
+Circle -7500403 true true 116 41 127
+Circle -7500403 true true 45 90 120
+Circle -7500403 true true 104 74 152
+
+triangle
+false
+0
+Polygon -7500403 true true 150 30 15 255 285 255
+
+triangle 2
+false
+0
+Polygon -7500403 true true 150 30 15 255 285 255
+Polygon -16777216 true false 151 99 225 223 75 224
+
+truck
+false
+0
+Rectangle -7500403 true true 4 45 195 187
+Polygon -7500403 true true 296 193 296 150 259 134 244 104 208 104 207 194
+Rectangle -1 true false 195 60 195 105
+Polygon -16777216 true false 238 112 252 141 219 141 218 112
+Circle -16777216 true false 234 174 42
+Rectangle -7500403 true true 181 185 214 194
+Circle -16777216 true false 144 174 42
+Circle -16777216 true false 24 174 42
+Circle -7500403 false true 24 174 42
+Circle -7500403 false true 144 174 42
+Circle -7500403 false true 234 174 42
+
+turtle
+true
+0
+Polygon -10899396 true false 215 204 240 233 246 254 228 266 215 252 193 210
+Polygon -10899396 true false 195 90 225 75 245 75 260 89 269 108 261 124 240 105 225 105 210 105
+Polygon -10899396 true false 105 90 75 75 55 75 40 89 31 108 39 124 60 105 75 105 90 105
+Polygon -10899396 true false 132 85 134 64 107 51 108 17 150 2 192 18 192 52 169 65 172 87
+Polygon -10899396 true false 85 204 60 233 54 254 72 266 85 252 107 210
+Polygon -7500403 true true 119 75 179 75 209 101 224 135 220 225 175 261 128 261 81 224 74 135 88 99
+
+wheel
+false
+0
+Circle -7500403 true true 3 3 294
+Circle -16777216 true false 30 30 240
+Line -7500403 true 150 285 150 15
+Line -7500403 true 15 150 285 150
+Circle -7500403 true true 120 120 60
+Line -7500403 true 216 40 79 269
+Line -7500403 true 40 84 269 221
+Line -7500403 true 40 216 269 79
+Line -7500403 true 84 40 221 269
+
+x
+false
+0
+Polygon -7500403 true true 270 75 225 30 30 225 75 270
+Polygon -7500403 true true 30 75 75 30 270 225 225 270
+@#$#@#$#@
+NetLogo 7.0.3
+@#$#@#$#@
+@#$#@#$#@
+@#$#@#$#@
+@#$#@#$#@
+@#$#@#$#@
+default
+0.0
+-0.2 0 0.0 1.0
+0.0 1 1.0 0.0
+0.2 0 0.0 1.0
+link direction
+true
+0
+Line -7500403 true 150 150 90 180
+Line -7500403 true 150 150 210 180
+@#$#@#$#@
+0
+@#$#@#$#@
+`;
+
+  // Populate code content
+  document.getElementById('netlogoCode').textContent = `;; Written by Will Braynen (June 2013).
+;;
+;; Software for an agent-based game-theoretic model of the contact hypothesis 
+;; of prejudice reduction, to accompany "Modeling Prejudice Reduction," 
+;; in the Handbook of Computational Social Psychology, adapted from 
+;; Public Affairs Quarterly 19 (2) 2005.
+;;
+;; REFERENCES
+;;  Grim, Patrick, Evan Selinger, William Braynen, Robert Rosenberger, 
+;;  Randy Au, Nancy Louie, and John Connolly. 2005. 
+;;  "Modeling Prejudice Reduction: Spatialized Game Theory and the Contact Hypothesis." 
+;;  Public Affairs Quarterly 19 (2): 95–125.
+;;
+;; Based on work done by Patrick Grim. (See "The Philosophy Computer",
+;; Grim, Mar, and St. Denis, MIT Press, 1998.)
+;;
+;; This is NetLogo code, so to run it, you need to install NetLogo:
+;; http://ccl.northwestern.edu/netlogo/
+;; It's free. I recommend installing it and playing around with it and
+;; this source code. NetLogo is the easiest programming environment
+;; for agent-based modeling out there.
+;;
+;; PORTED TO NETLOGO 7.0.3 - January 2026
+
+patches-own [
+  ethnicity
+  strategy
+  new_strategy
+  behavior
+  cooperated
+  defected
+  score
+]
+
+globals [
+  total_cooperated
+  total_defected
+  
+  is_show_ethnicities
+  is_segregated
+  
+  ;; Strategy constants (3-bit reactive strategies)
+  ;; The 3 bits encode behavior as follows:
+  ;;   First bit (leftmost):  First move (1 = cooperate, 0 = defect)
+  ;;   Second bit (middle): Response when opponent cooperated (1 = cooperate, 0 = defect)
+  ;;   Third bit (rightmost):  Response when opponent defected (1 = cooperate, 0 = defect)
+  AllD         ;; 0 (000) - Always defect
+  Strategy001  ;; 1 (001)
+  STFT         ;; 2 (010) - Suspicious TFT
+  Strategy011  ;; 3 (011)
+  Strategy100  ;; 4 (100) - Cooperate then all defect
+  Strategy101  ;; 5 (101)
+  TFT          ;; 6 (110) - Tit for tat
+  AllC         ;; 7 (111) - Always cooperate
+  PTFT         ;; 8 - Prejudiced Tit for Tat
+  
+  ;; Ethnicity constants
+  RedEthnicity    ;; 0
+  GreenEthnicity  ;; 1
+]
+
+;;  This procedure sets up the patches and patches
+to setup
+  clear-all
+  reset-ticks
+  init-constants
+  init-global-counters
+  set is_show_ethnicities false
+  set is_segregated true
+  ask patches [ init-patch ]
+  display-agents
+end
+
+to init-constants
+  ;; Strategy constants
+  set AllD 0
+  set Strategy001 1
+  set STFT 2
+  set Strategy011 3
+  set Strategy100 4
+  set Strategy101 5
+  set TFT 6
+  set AllC 7
+  set PTFT 8
+  ;; Ethnicity constants
+  set RedEthnicity 0
+  set GreenEthnicity 1
+end
+
+;; patch procedure
+to init-patch
+  init-patch-counters
+  set strategy (random 9)
+  ;; segregate by default:
+  ;; everything to the left of x = 0 is ethnicity 0;
+  ;; everything to the right of x = 0 is ethnicity 1
+  ifelse (pxcor < 0)
+    [ set ethnicity RedEthnicity ]
+    [ set ethnicity GreenEthnicity ]
+end
+
+;; reset counters
+;; patch procedure
+to init-patch-counters
+  set score 0
+  set cooperated 0
+  set defected 0
+end
+
+;; maps ethnicity e1 to color
+to-report etchnicity-to-color [ e1 ]
+  if (e1 = RedEthnicity) [ report red ]
+  if (e1 = GreenEthnicity) [ report green ]
+end
+
+;; maps strategy s1 to color
+to-report strategy-to-color [ s1 ]
+  if (s1 = AllD) [ report green ]
+  if (s1 = Strategy001) [ report cyan ]
+  if (s1 = STFT) [ report red ]
+  if (s1 = Strategy011) [ report magenta ]
+  if (s1 = Strategy100) [ report yellow ]
+  if (s1 = Strategy101) [ report 7 ]   ;; dark gray
+  if (s1 = TFT) [ report 3 ]   ;; light gray
+  if (s1 = AllC) [ report blue ]
+  if (s1 = PTFT) [ report 27 ]  ;; light orange
+end
+
+to display-agents
+  ifelse is_show_ethnicities
+     [ ask patches [ set pcolor (etchnicity-to-color ethnicity) ]]
+     [ ask patches [ set pcolor (strategy-to-color strategy) ]]
+end
+
+;;  This procedure makes the patches do stuff:
+;;    - patches interact with neighbors
+;;    - patches evolve based on the fitness of their strategy
+;;    - patches update their strategy
+;;    - and then display the patches with their new strategy
+to go
+  ask patches [ play_with_neighbors ]   ;; patches interact
+  ask patches [ evolve ]                ;; patches evolve
+  ask patches [ set strategy new_strategy ]
+  display-agents
+  init-global-counters
+  ask patches [ count-total-cooperated ]
+  my-update-plots
+  tick
+end                                     ;; go
+
+to init-global-counters
+  set total_cooperated 0
+  set total_defected   0
+end
+
+;;;;;;;;;;;;;;
+;; ethnicity
+;;;;;;;;;;;;;;
+
+to show_ethnicities                     ;; toggle
+  set is_show_ethnicities (not is_show_ethnicities)
+  ifelse is_show_ethnicities
+     [ ask patches [ set pcolor (etchnicity-to-color ethnicity) ]]
+     [ ask patches [ set pcolor (strategy-to-color strategy) ]]
+end
+
+to desegregate                          ;; toggle
+  set is_segregated (not is_segregated)
+  ask patches [ init_ethnicity ]
+  display-agents
+end
+
+;; a patch changes its ethnicity
+;; (as part of the desegregate toggle)
+to init_ethnicity
+  ifelse is_segregated
+     [ ifelse (pxcor < 0)
+       [ set ethnicity RedEthnicity ]
+       [ set ethnicity GreenEthnicity ]]
+     [ set ethnicity (random 2) ]
+end
+
+;;;;;;;;;;;;;;
+;; plots
+;;;;;;;;;;;;;;
+
+to my-update-plots
+  ;; Strategies plot
+  set-current-plot "Strategies"
+  
+  set-current-plot-pen "000 AllD"
+  plot count patches with [strategy = AllD]
+  
+  set-current-plot-pen "001"
+  plot count patches with [strategy = Strategy001]
+
+  set-current-plot-pen "010 STFT"
+  plot count patches with [strategy = STFT]
+  
+  set-current-plot-pen "011"
+  plot count patches with [strategy = Strategy011]
+  
+  set-current-plot-pen "100"
+  plot count patches with [strategy = Strategy100]
+  
+  set-current-plot-pen "101"
+  plot count patches with [strategy = Strategy101]
+  
+  set-current-plot-pen "110 TFT"
+  plot count patches with [strategy = TFT]
+  
+  set-current-plot-pen "111 AllC"
+  plot count patches with [strategy = AllC]
+  
+  set-current-plot-pen "PTFT"
+  plot count patches with [strategy = PTFT]   
+  
+  ;; Behavior plot
+  set-current-plot "Behavior"
+    
+  set-current-plot-pen "C"
+  plot total_cooperated
+  
+  set-current-plot-pen "D"
+  plot total_defected
+end
+
+;; patch procedure
+to count-total-cooperated
+  set total_cooperated (total_cooperated + cooperated)
+  set total_defected (total_defected + defected)
+end
+
+;; patch procedure
+;; eight neighbors to play with
+to play_with_neighbors
+  init-patch-counters
+  ;; x and y are coordinates relative to the current patch;
+  ;; that is, the x and y is added to the x and y of the patch
+  set score (play-with  0  1             ;; north
+           + play-with  1  1             ;; northeast
+           + play-with  1  0             ;; east
+           + play-with  1 -1             ;; southeast
+           + play-with  0 -1             ;; south
+           + play-with -1 -1             ;; southwest
+           + play-with -1  0             ;; west
+           + play-with -1  1)            ;; northwest
+end
+
+to-report play-with [ x y ]
+  ;; what is my strategy? if PTFT, then strategy is contextual
+  let s1 (my-strategy x y)
+  ;; what is my neighbor's strategy? if PTFT, then it is contextual
+  let s2 (neighbor-strategy x y)
+  report payoff s1 s2
+end
+
+;; strategy is the strategy of the neighbor, with the caveat that
+;; for PTFT, the strategy is contextual.
+;;
+;; contextual PTFT is complicated: from the point of view of the neighbor,
+;; my neighbor's strategy is contextual PTFT: from my point of view,
+;; if my neighbor is the same ethnicity as me, then my neighbor is TFT,
+;; and if my neighbor is not the same ethnicity as me, then my neighbor
+;; is AllD.
+to-report neighbor-strategy [ x y ]
+  if (([strategy] of patch-at x y) != PTFT)
+     [ report ([strategy] of patch-at x y) ] 
+  if (([strategy] of patch-at x y) = PTFT)
+     [ ifelse (([ethnicity] of patch-at x y) = ethnicity)
+        [ report TFT ]
+        [ report AllD ]
+     ]
+end
+     
+;; my strategy, with the caveat that for PTFT, the strategy is contextual.
+to-report my-strategy [ x y ]
+  if (strategy != PTFT)
+     [ report strategy ] 
+  if (strategy = PTFT)
+     [ ifelse (ethnicity = ([ethnicity] of patch-at x y))
+        [ report TFT ]
+        [ report AllD ]
+     ]  
+end
+
+;; patch procedure
+to evolve
+  ;; Find fittest neighbor (within imitation radius)
+  let fittest-neighbor max-one-of (patches in-radius imitation_radius) [score]
+  ifelse (score < [score] of fittest-neighbor) [
+    ;; switch to strategy of fittest neighbor
+    set new_strategy ([strategy] of fittest-neighbor)
+  ] [
+    ;; keep your own!
+    set new_strategy strategy
+  ]
+end
+
+to increment_cooperated [ inc ]
+  set cooperated (cooperated + inc)
+  set defected (defected + (rounds_to_play - inc))
+end
+
+;; s1 is strategy1, your strategy
+;; s2 is strategy2, your neighbor's strategy
+to-report payoff [ s1 s2 ]
+  ;; Strategies are 3-bit reactive strategies (0-7):
+  ;;   Bit 2 (s >= 4):      First move (1 = cooperate, 0 = defect)
+  ;;   Bit 1 (s mod 4 >= 2): Response when opponent cooperated
+  ;;   Bit 0 (s mod 2 = 1):  Response when opponent defected
+  ;;
+  ;; Examples:
+  ;;   AllD (0 = 000): defect first, defect if they C, defect if they D
+  ;;   TFT  (6 = 110): coop first, coop if they C, defect if they D
+  ;;   AllC (7 = 111): coop first, coop if they C, coop if they D
+  
+  let coop-count 0   ;; track how many rounds I cooperate
+  let total 0        ;; accumulate my payoff
+  
+  ;; Determine first moves from bit 2
+  let m1 (s1 >= 4)   ;; my move (true = cooperate)
+  let m2 (s2 >= 4)   ;; their move
+  
+  repeat rounds_to_play [
+    ;; Count my cooperation
+    if m1 [ set coop-count coop-count + 1 ]
+    
+    ;; Add this round's payoff based on both moves
+    set total total + (ifelse-value m1
+      [ ifelse-value m2 [ payoffs_cc ] [ payoffs_cd ] ]   ;; I cooperate
+      [ ifelse-value m2 [ payoffs_dc ] [ payoffs_dd ] ])  ;; I defect
+    
+    ;; Save previous moves for reactive decision
+    let prev-m1 m1
+    let prev-m2 m2
+    
+    ;; Determine next moves based on opponent's previous move
+    ;; If opponent cooperated: use bit 1 (s mod 4 >= 2)
+    ;; If opponent defected:   use bit 0 (s mod 2 = 1)
+    set m1 ifelse-value prev-m2 [ s1 mod 4 >= 2 ] [ s1 mod 2 = 1 ]
+    set m2 ifelse-value prev-m1 [ s2 mod 4 >= 2 ] [ s2 mod 2 = 1 ]
+  ]
+  
+  increment_cooperated coop-count
+  report total
+end`;
+
+  document.getElementById('jsCode').textContent = `// Written by Will Braynen with AI Copilot (January 2026).
+//
+// Software for an agent-based game-theoretic model of the contact hypothesis 
+// of prejudice reduction, to accompany "Modeling Prejudice Reduction," 
+// in the Handbook of Computational Social Psychology, adapted from 
+// Public Affairs Quarterly 19 (2) 2005.
+//
+// REFERENCES
+//  Grim, Patrick, Evan Selinger, William Braynen, Robert Rosenberger, 
+//  Randy Au, Nancy Louie, and John Connolly. 2005. 
+//  "Modeling Prejudice Reduction: Spatialized Game Theory and the Contact Hypothesis." 
+//  Public Affairs Quarterly 19 (2): 95–125.
+//
+// Based on work done by Patrick Grim. (See "The Philosophy Computer",
+// Grim, Mar, and St. Denis, MIT Press, 1998.)
+//
+// Ported to JavaScript from NetLogo - January 2026
+
+// Strategy constants
+const STRATEGY = {
+  ALL_D: 0, SUSP_PERV: 1, STFT: 2, S011: 3,
+  C_THEN_ALL_D: 4, S101: 5, TFT: 6, ALL_C: 7, PTFT: 8
+};
+
+const STRATEGY_COLOR = {
+  0: "#00C000", 1: "#00FFFF", 2: "#FF0000", 3: "#FF00FF",
+  4: "#FFFF00", 5: "#B3B3B3", 6: "#4D4D4D", 7: "#0000FF", 8: "#FFB366"
+};
+
+const ETHNICITY_COLOR = { 0: "#FF0000", 1: "#00C000" };
+
+class Cell {
+  constructor(x, y, ethnicity, strategy) {
+    this.x = x;
+    this.y = y;
+    this.ethnicity = ethnicity;
+    this.strategy = strategy;
+    this.newStrategy = strategy;
+    this.score = 0;
+    this.cooperated = 0;
+    this.defected = 0;
+  }
+  resetCounters() {
+    this.score = 0;
+    this.cooperated = 0;
+    this.defected = 0;
+  }
+}
+
+class Simulation {
+  constructor() {
+    this.gridSize = 64;
+    this.isShowEthnicities = false;
+    this.isSegregated = true;
+    this.running = false;
+    this.generation = 0;
+    this.grid = [];
+    // ... canvas and plot setup
+  }
+
+  initEthnicities() {
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        const c = this.grid[x][y];
+        if (this.isSegregated) {
+          c.ethnicity = (x < this.gridSize / 2) ? 0 : 1;
+        } else {
+          c.ethnicity = Math.floor(Math.random() * 2);
+        }
+      }
+    }
+  }
+
+  // PTFT resolution: same ethnicity → TFT, different → AllD
+  resolveMyStrategyAgainst(me, other) {
+    if (me.strategy !== STRATEGY.PTFT) return me.strategy;
+    return (me.ethnicity === other.ethnicity) ? STRATEGY.TFT : STRATEGY.ALL_D;
+  }
+
+  resolveNeighborStrategyAgainst(other, me) {
+    if (other.strategy !== STRATEGY.PTFT) return other.strategy;
+    return (other.ethnicity === me.ethnicity) ? STRATEGY.TFT : STRATEGY.ALL_D;
+  }
+
+  playWithNeighbor(me, neighbor) {
+    const s1 = this.resolveMyStrategyAgainst(me, neighbor);
+    const s2 = this.resolveNeighborStrategyAgainst(neighbor, me);
+    return this.payoff(s1, s2, me);
+  }
+
+  step() {
+    // Reset counters
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        this.grid[x][y].resetCounters();
+      }
+    }
+
+    // Play with 8 neighbors
+    const offsets = [[0,1],[1,1],[1,0],[1,-1],[0,-1],[-1,-1],[-1,0],[-1,1]];
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        const me = this.grid[x][y];
+        let sum = 0;
+        for (const [dx, dy] of offsets) {
+          sum += this.playWithNeighbor(me, this.cellAt(x + dx, y + dy));
+        }
+        me.score = sum;
+      }
+    }
+
+    // Evolve: imitate fittest neighbor if their score > mine
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        const me = this.grid[x][y];
+        const neighborhood = this.getCellsInRadius(x, y, this.imitationRadius);
+        const maxScore = Math.max(...neighborhood.map(c => c.score));
+        const best = neighborhood.filter(c => c.score === maxScore);
+        const chosen = best[Math.floor(Math.random() * best.length)];
+        me.newStrategy = (me.score < chosen.score) ? chosen.strategy : me.strategy;
+      }
+    }
+
+    // Apply new strategies
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        this.grid[x][y].strategy = this.grid[x][y].newStrategy;
+      }
+    }
+    this.generation++;
+  }
+
+  payoff(s1, s2, cell) {
+    // Closed-form payoff calculation for all 64 strategy pairs
+    // Returns score based on rounds_to_play and payoff matrix (CC, CD, DC, DD)
+    // Also tracks cooperation/defection counts
+    // ... (full payoff matrix implementation)
+  }
+}`;
+
+  document.getElementById('pseudoCode').innerHTML = `<span class="pseudo-heading">SETUP:</span>
+  For each cell in grid:
+    Assign random strategy (0-8)
+    If segregated: left half = ethnicity 0, right half = ethnicity 1
+    Else: random ethnicity (0 or 1)
+
+<span class="pseudo-heading">MAIN LOOP (each tick):</span>
+  <span class="pseudo-heading">1. PLAY WITH NEIGHBORS</span>
+     For each cell:
+       Reset score, cooperated, defected to 0
+       For each of 8 neighbors:
+         Resolve my strategy (if PTFT: same ethnicity → TFT, else → AllD)
+         Resolve neighbor's strategy (same PTFT rule)
+         Calculate payoff using closed-form formulas
+         Add to my score
+         Track cooperation/defection counts
+
+  <span class="pseudo-heading">2. EVOLVE</span>
+     For each cell:
+       Find all cells within imitation_radius
+       Find the cell(s) with highest score
+       If my score &lt; best neighbor's score:
+         Adopt their strategy
+       Else:
+         Keep my strategy
+
+  <span class="pseudo-heading">3. UPDATE</span>
+     Apply all new strategies simultaneously
+     Update display and plots
+
+<span class="pseudo-heading">PTFT STRATEGY (Prejudiced Tit-For-Tat):</span>
+  When playing against a neighbor:
+    If same ethnicity: behave as TFT (110)
+      - Cooperate first, then copy opponent's last move
+    If different ethnicity: behave as AllD (000)
+      - Always defect
+
+<span class="pseudo-heading">STRATEGIES (3-bit reactive):</span>
+  First bit (leftmost): First move (1=cooperate, 0=defect)
+  Second bit (middle): Response to opponent's cooperation
+  Third bit (rightmost): Response to opponent's defection
+  
+  000 (0) = AllD        - Always defect
+  001 (1) = Strategy001 - Defect first, then cooperate only if they defect
+  010 (2) = STFT        - Suspicious TFT: defect first, then copy opponent
+  011 (3) = Strategy011 - Defect first, then always cooperate
+  100 (4) = Strategy100 - Cooperate first, then always defect
+  101 (5) = Strategy101 - Cooperate first, then cooperate only if they defect
+  110 (6) = TFT         - Tit-for-tat: cooperate first, then copy opponent
+  111 (7) = AllC        - Always cooperate
+  PTFT (8)              - Prejudiced TFT: TFT with same ethnicity, AllD with different`;
+})();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+// Register NetLogo language for highlight.js
+hljs.registerLanguage('netlogo', function(hljs) {
+  return {
+    name: 'NetLogo',
+    case_insensitive: true,
+    keywords: {
+      keyword: 'to to-report end if ifelse else ask set let report foreach while repeat loop stop',
+      built_in: 'patches turtles links breed globals patches-own turtles-own links-own extensions __includes',
+      literal: 'true false nobody',
+    },
+    contains: [
+      hljs.COMMENT(';;', '$'),
+      hljs.QUOTE_STRING_MODE,
+      hljs.NUMBER_MODE,
+      {
+        className: 'built_in',
+        begin: /\b(random|count|max-one-of|min-one-of|one-of|in-radius|patch-at|neighbors|neighbors4|pxcor|pycor|pcolor|xcor|ycor|color|heading|who|self|myself|other|tick|ticks|reset-ticks|clear-all|display|setup|go|not|and|or|with|of|mod|abs|int|round|floor|ceiling|sqrt|sin|cos|tan|exp|ln|log|mean|sum|max|min|list|first|last|item|length|empty\?|member\?|remove|replace-item|sort|reverse|fput|lput|but-first|but-last|sublist|n-of|up-to-n-of|any\?|all\?|is-patch\?|is-turtle\?|is-agent\?|is-list\?|is-string\?|is-number\?)\b/
+      },
+      {
+        className: 'title',
+        begin: /\b(setup|go|init-patch|init-patch-counters|display-agents|evolve|payoff|play-with|my-strategy|neighbor-strategy|increment_cooperated|play_with_neighbors|count-total-cooperated|init-global-counters|show_ethnicities|desegregate|init_ethnicity|etchnicity-to-color|strategy-to-color)\b/
+      }
+    ]
+  };
+});
+hljs.highlightAll();
+</script>
+
+<script>
+// Dynamically update payoff card background based on payoff value (0–10)
+// Color meaning:
+//   green = cooperation rewarded
+//   red   = defection rewarded
+// Mapping (0->10):
+//   CC, CD : red -> green
+//   DC, DD : green -> red
+(function () {
+  const MAX = 10;
+
+  // Very light iOS-like tints
+  const RED   = { r: 255, g: 59,  b: 48, a: 0.12 };  // defection rewarded
+  const GREEN = { r: 52,  g: 199, b: 89, a: 0.12 };  // cooperation rewarded
+
+  function mix(c1, c2, t) {
+    return {
+      r: Math.round(c1.r + (c2.r - c1.r) * t),
+      g: Math.round(c1.g + (c2.g - c1.g) * t),
+      b: Math.round(c1.b + (c2.b - c1.b) * t),
+      a: c1.a + (c2.a - c1.a) * t
+    };
+  }
+
+  function endpointsForCard(card) {
+    // Default: red->green
+    let from = RED, to = GREEN;
+
+    if (card.classList.contains('payoff-dc') || card.classList.contains('payoff-dd')) {
+      // DC/DD: green->red
+      from = GREEN; to = RED;
+    }
+    return { from, to };
+  }
+
+  function updateCard(card) {
+    const input = card.querySelector('input[type="range"], input[type="number"], input');
+    if (!input) return;
+
+    const v = Math.max(0, Math.min(MAX, parseFloat(input.value) || 0));
+    const t = v / MAX;
+
+    const { from, to } = endpointsForCard(card);
+    const c = mix(from, to, t);
+
+    card.style.backgroundColor = `rgba(${c.r}, ${c.g}, ${c.b}, ${c.a})`;
+  }
+
+  function init() {
+    const cards = document.querySelectorAll('.payoff-card');
+    cards.forEach(card => {
+      const input = card.querySelector('input[type="range"], input[type="number"], input');
+      if (!input) return;
+
+      updateCard(card);
+      input.addEventListener('input', () => updateCard(card));
+      input.addEventListener('change', () => updateCard(card));
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+
+</body>
+</html>
