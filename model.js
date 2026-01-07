@@ -96,11 +96,19 @@ class Cell {
         }
 
         // Add social identification bonus for PTFT playing with same color
+        // NOTE: apply bonus symmetrically where appropriate so each agent's
+        // payoff reflects their own PTFT extra benefit when interacting
+        // with same-group partners (enforces paper assumption: bonus
+        // applies to PTFT only in same-group interactions).
         if (this.isPTFT() && this.color === opponent.color && socialBonus > 0) {
             myScore += socialBonus;
         }
+        if (opponent.isPTFT() && opponent.color === this.color && socialBonus > 0) {
+            oppScore += socialBonus;
+        }
 
-        return myScore;
+        // Return both players' scores so caller can accumulate them symmetrically
+        return [myScore, oppScore];
     }
 
     isPTFT() {
@@ -199,14 +207,31 @@ class Simulation {
 
     step() {
         // Play games and calculate scores
+        // First zero all scores
+        for (let x = 0; x < this.gridSize; x++) {
+            for (let y = 0; y < this.gridSize; y++) {
+                this.grid[x][y].score = 0;
+            }
+        }
+
+        // Compute each unordered pair of neighbors once and add payoffs
+        // symmetrically to both agents (enforces paper assumption: each
+        // agent's total score is the sum of its own PD payoffs).
         for (let x = 0; x < this.gridSize; x++) {
             for (let y = 0; y < this.gridSize; y++) {
                 const cell = this.grid[x][y];
-                cell.score = 0;
                 const neighbors = this.getNeighbors(x, y);
 
                 for (const neighbor of neighbors) {
-                    cell.score += cell.playGame(neighbor, this.socialBonus);
+                    // Ensure each unordered pair is processed only once by using
+                    // a simple lexicographic ordering on coordinates. This avoids
+                    // double-counting interactions.
+                    if (neighbor.x < x) continue;
+                    if (neighbor.x === x && neighbor.y <= y) continue;
+
+                    const [s1, s2] = cell.playGame(neighbor, this.socialBonus);
+                    cell.score += s1;
+                    neighbor.score += s2;
                 }
             }
         }
@@ -217,18 +242,20 @@ class Simulation {
                 const cell = this.grid[x][y];
                 const neighbors = this.getNeighbors(x, y);
 
-                let bestNeighbor = cell;
-                let bestScore = cell.score;
-
+                // Per paper: identify the maximum score among neighbors (exclude
+                // the focal agent), collect all neighbors with that maximum,
+                // randomly select one, and copy its strategy. This implements
+                // stochastic tie-breaking among top-scoring neighbors rather than
+                // defaulting to keeping one's own strategy.
+                let maxScore = -Infinity;
                 for (const neighbor of neighbors) {
-                    if (neighbor.score > bestScore) {
-                        bestScore = neighbor.score;
-                        bestNeighbor = neighbor;
-                    }
+                    if (neighbor.score > maxScore) maxScore = neighbor.score;
                 }
-                // no tie-breaking: keep your own strategy on ties
 
-                cell.nextStrategy = bestNeighbor.strategy;
+                const topNeighbors = neighbors.filter(n => n.score === maxScore);
+                // Randomly break ties among top neighbors
+                const chosen = topNeighbors[Math.floor(Math.random() * topNeighbors.length)];
+                cell.nextStrategy = chosen.strategy;
             }
         }
 
