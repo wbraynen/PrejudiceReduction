@@ -52,6 +52,61 @@ const ETHNICITY_COLOR = {
   1: "#00C000"
 };
 
+function drawLinePlot(canvas, seriesList, yMax, xSpan) {
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  const w = canvas.width;
+  const h = canvas.height;
+
+  const padding = { left: 36, right: 10, top: 10, bottom: 22 };
+  const plotW = w - padding.left - padding.right;
+  const plotH = h - padding.top - padding.bottom;
+
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = "#c9c9c9";
+  ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
+
+  const yMaxSafe = Math.max(1, yMax);
+  const yFor = (v) => padding.top + (1 - v / yMaxSafe) * plotH;
+
+  ctx.strokeStyle = "#b5b5b5";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padding.left, padding.top);
+  ctx.lineTo(padding.left, h - padding.bottom);
+  ctx.lineTo(w - padding.right, h - padding.bottom);
+  ctx.stroke();
+
+  ctx.fillStyle = "#666";
+  ctx.font = "10px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif";
+  ctx.fillText(String(Math.round(yMaxSafe)), 4, padding.top + 8);
+  ctx.fillText("0", 10, h - 8);
+
+  if (!seriesList.length || seriesList[0].data.length === 0) return;
+
+  const n = seriesList[0].data.length;
+  const span = Math.max(2, xSpan || n);
+  const xFor = (i) => {
+    if (span <= 1) return padding.left;
+    return padding.left + (i / (span - 1)) * plotW;
+  };
+
+  for (const series of seriesList) {
+    ctx.strokeStyle = series.color;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    series.data.forEach((v, i) => {
+      const x = xFor(i);
+      const y = yFor(v);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+  }
+}
+
 function randInt(n) {
   return Math.floor(Math.random() * n);
 }
@@ -96,6 +151,10 @@ class Simulation {
     this.canvas = document.getElementById("worldCanvas");
     this.ctx = this.canvas.getContext("2d", { alpha: false });
 
+    // Plots
+    this.strategiesPlotCanvas = document.getElementById("strategiesPlot");
+    this.behaviorPlotCanvas = document.getElementById("behaviorPlot");
+
     // Data
     this.grid = [];
     this.totalCooperated = 0;
@@ -125,19 +184,20 @@ class Simulation {
   }
 
   setupEventListeners() {
-    document.getElementById("startBtn").addEventListener("click", () => this.start());
-    document.getElementById("pauseBtn").addEventListener("click", () => this.pause());
+    document.getElementById("startBtn").addEventListener("click", () => this.toggleRun());
     document.getElementById("resetBtn").addEventListener("click", () => this.reset());
 
     document.getElementById("toggleDisplayBtn").addEventListener("click", () => {
       this.isShowEthnicities = !this.isShowEthnicities;
       this.draw();
+      this.updateDisplayButton();
     });
 
     document.getElementById("desegregateBtn").addEventListener("click", () => {
       this.isSegregated = !this.isSegregated;
       this.initEthnicities(); // like NetLogo: ask patches [ init_ethnicity ]
       this.draw();
+      this.updateSegregationButton();
     });
 
     // If these sliders change, NetLogo doesn't auto-reset; but web sims often do.
@@ -175,6 +235,10 @@ class Simulation {
 
     this.draw();
     this.updateStatsUI();
+    this.renderPlots();
+    this.updateRunButton();
+    this.updateDisplayButton();
+    this.updateSegregationButton();
   }
 
   initEthnicities() {
@@ -416,6 +480,7 @@ class Simulation {
     this.draw();
     this.updateStatsUI();
     this.updateHistory(); // optional chart
+    this.renderPlots();
   }
 
   draw() {
@@ -482,6 +547,36 @@ class Simulation {
     });
   }
 
+  renderPlots() {
+    if (!this.history.length) {
+      drawLinePlot(this.strategiesPlotCanvas, [], this.gridSize * this.gridSize, 30);
+      drawLinePlot(this.behaviorPlotCanvas, [], 7000000, 30);
+      return;
+    }
+
+    const strategySeries = [];
+    for (let i = 0; i < 9; i++) {
+      strategySeries.push({
+        color: STRATEGY_COLOR[i],
+        data: this.history.map(h => h.strategies[i])
+      });
+    }
+    const maxStrategies = this.gridSize * this.gridSize;
+    const span = Math.max(30, this.history.length);
+    drawLinePlot(this.strategiesPlotCanvas, strategySeries, maxStrategies, span);
+
+    const behaviorSeries = [
+      { color: "#2e7d32", data: this.history.map(h => h.cooperated) },
+      { color: "#c62828", data: this.history.map(h => h.defected) }
+    ];
+    let maxBehavior = 7000000;
+    for (const h of this.history) {
+      if (h.cooperated > maxBehavior) maxBehavior = h.cooperated;
+      if (h.defected > maxBehavior) maxBehavior = h.defected;
+    }
+    drawLinePlot(this.behaviorPlotCanvas, behaviorSeries, Math.ceil(maxBehavior * 1.05), span);
+  }
+
   start() {
     this.running = true;
     this.runLoop();
@@ -489,6 +584,31 @@ class Simulation {
 
   pause() {
     this.running = false;
+  }
+
+  toggleRun() {
+    if (this.running) this.pause();
+    else this.start();
+    this.updateRunButton();
+  }
+
+  updateRunButton() {
+    const btn = document.getElementById("startBtn");
+    if (!btn) return;
+    btn.textContent = this.running ? "pause" : "go";
+    btn.title = this.running ? "Pause" : "NetLogo: go";
+  }
+
+  updateDisplayButton() {
+    const btn = document.getElementById("toggleDisplayBtn");
+    if (!btn) return;
+    btn.textContent = this.isShowEthnicities ? "show strategies" : "show ethnicities";
+  }
+
+  updateSegregationButton() {
+    const btn = document.getElementById("desegregateBtn");
+    if (!btn) return;
+    btn.textContent = this.isSegregated ? "desegregate" : "segregate";
   }
 
   runLoop() {

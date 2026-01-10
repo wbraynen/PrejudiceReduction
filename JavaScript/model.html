@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Spatialized Prisoner's Dilemma (NetLogo-matched)</title>
+  <title>Spatialized Prisoner's Dilemma (with PTFT)</title>
   <style>
     :root{
       --panel-bg:#efefef;
@@ -88,6 +88,17 @@
       font-weight: 700;
       font-size: 12px;
       text-transform: none;
+      min-width: 56px;
+    }
+
+    .button-wide{
+      width: 120px;
+      flex: 0 0 120px;
+      white-space: nowrap;
+      height: 32px;
+      line-height: 32px;
+      padding-top: 0;
+      padding-bottom: 0;
     }
     button:active{ transform: translateY(1px); }
 
@@ -169,6 +180,19 @@
       margin-top: 10px;
     }
 
+    .plot-panel{
+      margin-top: 12px;
+    }
+
+    .plot-canvas{
+      width: 100%;
+      height: 180px;
+      display:block;
+      background:#fff;
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+    }
+
     @media (max-width: 1050px){
       .app{ grid-template-columns: 1fr; }
       #worldCanvas{
@@ -188,12 +212,11 @@
       <div class="buttonbar">
         <button id="resetBtn" title="NetLogo: setup">setup</button>
         <button id="startBtn" title="NetLogo: go">go</button>
-        <button id="pauseBtn" title="Pause">pause</button>
       </div>
 
       <div class="buttonbar">
-        <button id="toggleDisplayBtn" title="NetLogo: toggle display">toggle display</button>
-        <button id="desegregateBtn" title="NetLogo: (de)segragate">(de)segragate</button>
+        <button id="toggleDisplayBtn" class="button-wide" title="NetLogo: toggle display">show ethnicities</button>
+        <button id="desegregateBtn" class="button-wide" title="NetLogo: (de)segregate">desegregate</button>
       </div>
 
       <hr style="border:none;border-top:1px solid #ddd;margin:12px 0;">
@@ -203,61 +226,6 @@
         <span class="value-pill" id="speedValue">100</span>
       </div>
       <input type="range" id="speed" min="50" max="1000" value="100" step="50" />
-
-      <div class="note">
-        Defaults match the NetLogo model: segregated ethnicities, showing strategies, rounds=200,
-        imitation radius=1.5, payoffs (CC,CD,DC,DD) = (3,0,5,1).
-      </div>
-    </div>
-
-    <!-- Center: world view (single canvas like NetLogo) -->
-    <div class="world">
-      <div class="world-title">
-        <h1>Spatialized Prisoner's Dilemma</h1>
-        <div class="ticks">ticks: <span id="ticks">0</span></div>
-      </div>
-
-      <div class="canvas-wrap">
-        <canvas id="worldCanvas" width="64" height="64"></canvas>
-      </div>
-
-      <div class="panel">
-        <h2>Behavior totals (NetLogo “Behavior” plot values)</h2>
-        <table class="mini-table">
-          <tr><th>moves</th><th>count</th></tr>
-          <tr><td>C (cooperate)</td><td id="total_cooperated">0</td></tr>
-          <tr><td>D (defect)</td><td id="total_defected">0</td></tr>
-        </table>
-      </div>
-    </div>
-
-    <!-- Right controls (NetLogo-like sliders + strategy counts) -->
-    <div class="panel">
-      <h2>Parameters</h2>
-
-      <div class="slider-row">
-        <label for="payoffs_cc">payoffs_cc</label>
-        <span class="value-pill" id="payoffs_cc_value">3</span>
-      </div>
-      <input type="range" id="payoffs_cc" min="0" max="10" step="1" value="3" />
-
-      <div class="slider-row">
-        <label for="payoffs_cd">payoffs_cd</label>
-        <span class="value-pill" id="payoffs_cd_value">0</span>
-      </div>
-      <input type="range" id="payoffs_cd" min="0" max="10" step="1" value="0" />
-
-      <div class="slider-row">
-        <label for="payoffs_dc">payoffs_dc</label>
-        <span class="value-pill" id="payoffs_dc_value">5</span>
-      </div>
-      <input type="range" id="payoffs_dc" min="0" max="10" step="1" value="5" />
-
-      <div class="slider-row">
-        <label for="payoffs_dd">payoffs_dd</label>
-        <span class="value-pill" id="payoffs_dd_value">1</span>
-      </div>
-      <input type="range" id="payoffs_dd" min="0" max="10" step="1" value="1" />
 
       <hr style="border:none;border-top:1px solid #ddd;margin:12px 0;">
 
@@ -272,10 +240,68 @@
         <span class="value-pill" id="imitation_radius_value">1.5</span>
       </div>
       <input type="range" id="imitation_radius" min="1" max="3" step="0.5" value="1.5" />
+    </div>
+
+    <!-- Center: world view (single canvas like NetLogo) -->
+    <div class="world">
+      <div class="world-title">
+        <h1>Spatialized Prisoner's Dilemma (with PTFT)</h1>
+        <div class="ticks">round: <span id="ticks">0</span></div>
+      </div>
+
+      <div class="canvas-wrap">
+        <canvas id="worldCanvas" width="64" height="64"></canvas>
+      </div>
+
+      <div class="panel">
+        <h2>Behavior totals (NetLogo “Behavior” plot values)</h2>
+        <table class="mini-table">
+          <tr><th>moves</th><th>count</th></tr>
+          <tr><td>C (cooperate)</td><td id="total_cooperated">0</td></tr>
+          <tr><td>D (defect)</td><td id="total_defected">0</td></tr>
+        </table>
+      </div>
+
+      <div class="panel plot-panel">
+        <h2>Plots (NetLogo)</h2>
+        <div style="font-size:12px;font-weight:700;margin:6px 0 6px 0;">Behavior</div>
+        <canvas id="behaviorPlot" class="plot-canvas" width="320" height="180"></canvas>
+        <div style="font-size:12px;font-weight:700;margin:10px 0 6px 0;">Strategies</div>
+        <canvas id="strategiesPlot" class="plot-canvas" width="320" height="180"></canvas>
+      </div>
+    </div>
+
+    <!-- Right controls (NetLogo-like sliders + strategy counts) -->
+    <div class="panel">
+      <h2>Payoffs</h2>
+
+      <div class="slider-row">
+        <label for="payoffs_cc">CC</label>
+        <span class="value-pill" id="payoffs_cc_value">3</span>
+      </div>
+      <input type="range" id="payoffs_cc" min="0" max="10" step="1" value="3" />
+
+      <div class="slider-row">
+        <label for="payoffs_cd">CD</label>
+        <span class="value-pill" id="payoffs_cd_value">0</span>
+      </div>
+      <input type="range" id="payoffs_cd" min="0" max="10" step="1" value="0" />
+
+      <div class="slider-row">
+        <label for="payoffs_dc">DC</label>
+        <span class="value-pill" id="payoffs_dc_value">5</span>
+      </div>
+      <input type="range" id="payoffs_dc" min="0" max="10" step="1" value="5" />
+
+      <div class="slider-row">
+        <label for="payoffs_dd">DD</label>
+        <span class="value-pill" id="payoffs_dd_value">1</span>
+      </div>
+      <input type="range" id="payoffs_dd" min="0" max="10" step="1" value="1" />
 
       <hr style="border:none;border-top:1px solid #ddd;margin:12px 0;">
 
-      <h2>Strategies (NetLogo “Strategies” plot counts)</h2>
+      <h2>Strategies</h2>
       <table class="mini-table">
         <tr><th>strategy</th><th>count</th></tr>
         <tr><td><span class="swatch" style="background:#00C000"></span>000 AllD</td><td id="count_s0">0</td></tr>
@@ -288,11 +314,6 @@
         <tr><td><span class="swatch" style="background:#0000FF"></span>111 AllC</td><td id="count_s7">0</td></tr>
         <tr><td><span class="swatch" style="background:#FFB366"></span>PTFT</td><td id="count_s8">0</td></tr>
       </table>
-
-      <div class="note">
-        Colors match the NetLogo <code>strategy-to-color</code> and <code>ethnicity-to-color</code>.
-        Use <b>toggle display</b> to switch between strategies and ethnicities.
-      </div>
     </div>
 
   </div>
