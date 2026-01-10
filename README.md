@@ -8,7 +8,7 @@ See the `ptft.nlogo` file in the NetLogo folder.  Instructions for how to run it
 
 ## JavaScript version
 
-See the JavaScript folder.  The `model.html` file can be opened in a web browser and it will in turn load the `model.js` file on its own.
+See the JavaScript folder.  The `model.html` file can be opened in a web browser.  It contains the JavaScript code.  You can, for example, download the html file and open it in a web browser.
 
 ## References
 
