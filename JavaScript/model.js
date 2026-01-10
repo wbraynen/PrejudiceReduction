@@ -191,6 +191,7 @@ class Simulation {
       this.isShowEthnicities = !this.isShowEthnicities;
       this.draw();
       this.updateDisplayButton();
+      this.updateDisplayModeLabel();
     });
 
     document.getElementById("desegregateBtn").addEventListener("click", () => {
@@ -238,6 +239,7 @@ class Simulation {
     this.renderPlots();
     this.updateRunButton();
     this.updateDisplayButton();
+    this.updateDisplayModeLabel();
     this.updateSegregationButton();
   }
 
@@ -602,7 +604,15 @@ class Simulation {
   updateDisplayButton() {
     const btn = document.getElementById("toggleDisplayBtn");
     if (!btn) return;
-    btn.textContent = this.isShowEthnicities ? "show strategies" : "show ethnicities";
+    btn.textContent = this.isShowEthnicities ? "show strategies" : "show \"ethnicities\"";
+  }
+
+  updateDisplayModeLabel() {
+    const label = document.getElementById("displayMode");
+    if (!label) return;
+    label.textContent = this.isShowEthnicities
+      ? "Displaying \"ethnicities\""
+      : "Displaying strategies";
   }
 
   updateSegregationButton() {

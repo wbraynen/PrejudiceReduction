@@ -92,8 +92,8 @@
     }
 
     .button-wide{
-      width: 120px;
-      flex: 0 0 120px;
+      width: 150px;
+      flex: 0 0 150px;
       white-space: nowrap;
       height: 32px;
       line-height: 32px;
@@ -215,7 +215,7 @@
       </div>
 
       <div class="buttonbar">
-        <button id="toggleDisplayBtn" class="button-wide" title="NetLogo: toggle display">show ethnicities</button>
+        <button id="toggleDisplayBtn" class="button-wide" title="NetLogo: toggle display">show "ethnicities"</button>
         <button id="desegregateBtn" class="button-wide" title="NetLogo: (de)segregate">desegregate</button>
       </div>
 
@@ -230,13 +230,13 @@
       <hr style="border:none;border-top:1px solid #ddd;margin:12px 0;">
 
       <div class="slider-row">
-        <label for="rounds_to_play">rounds_to_play</label>
+        <label for="rounds_to_play">rounds to play</label>
         <span class="value-pill" id="rounds_to_play_value">200</span>
       </div>
       <input type="range" id="rounds_to_play" min="4" max="200" step="4" value="200" />
 
       <div class="slider-row">
-        <label for="imitation_radius">imitation_radius</label>
+        <label for="imitation_radius">imitation radius</label>
         <span class="value-pill" id="imitation_radius_value">1.5</span>
       </div>
       <input type="range" id="imitation_radius" min="1" max="3" step="0.5" value="1.5" />
@@ -250,11 +250,12 @@
       </div>
 
       <div class="canvas-wrap">
+        <div id="displayMode" style="font-size:12px;font-weight:400;margin-bottom:6px;">Displaying strategies</div>
         <canvas id="worldCanvas" width="64" height="64"></canvas>
       </div>
 
       <div class="panel">
-        <h2>Behavior totals (NetLogo “Behavior” plot values)</h2>
+        <h2>Behavior totals</h2>
         <table class="mini-table">
           <tr><th>moves</th><th>count</th></tr>
           <tr><td>C (cooperate)</td><td id="total_cooperated">0</td></tr>
