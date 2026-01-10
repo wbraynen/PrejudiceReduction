@@ -1,422 +1,505 @@
-// Extracted JS from model.html
-// Strategy definitions
-const STRATEGIES = {
-    ALL_D: [0, 0, 0],        // All-Defect
-    SUSP_PERV: [0, 0, 1],    // Suspicious Perverse
-    SUSP_TFT: [0, 1, 0],     // Suspicious TFT
-    D_ALL_C: [0, 1, 1],      // D-then-All-C
-    C_ALL_D: [1, 0, 0],      // C-then-All-D
-    PERVERSE: [1, 0, 1],     // Perverse
-    TFT: [1, 1, 0],          // Tit for Tat
-    ALL_C: [1, 1, 1],        // All-Cooperate
-    PTFT: [9, 9, 9]          // Prejudicial TFT (special marker)
+// NetLogo-matching JS implementation
+// - Strategy ids: 0..7 are reactive bit strategies; 8 is PTFT
+// - Ethnicity: 0 = red, 1 = green
+// - World: torus wrapping
+// - Scoring: exact NetLogo payoff table (closed-form)
+// - Interaction: each patch plays each of 8 neighbors directionally (double-counted)
+// - Evolution: max-one-of (random tie-break) in-radius imitation_radius; adopt only if strictly higher
+
+// ----- NetLogo strategy ids (as in the NetLogo plot) -----
+const STRATEGY = {
+  ALL_D: 0,      // 000
+  SUSP_PERV: 1,  // 001
+  STFT: 2,       // 010 (Suspicious TFT)
+  S011: 3,       // 011
+  C_THEN_ALL_D: 4, // 100
+  S101: 5,       // 101
+  TFT: 6,        // 110
+  ALL_C: 7,      // 111
+  PTFT: 8        // PTFT
 };
 
-const STRATEGY_COLORS = {
-    '0,0,0': '#4444FF',     // All-D - Blue
-    '0,0,1': '#FF8800',     // Suspicious Perverse - Orange
-    '0,1,0': '#FFFF44',     // Suspicious TFT - Yellow
-    '0,1,1': '#00FF00',     // D-then-All-C - Green
-    '1,0,0': '#FF44FF',     // C-then-All-D - Magenta
-    '1,0,1': '#44FFFF',     // Perverse - Cyan
-    '1,1,0': '#000000',     // TFT - Black (as specified)
-    '1,1,1': '#44FF44',     // All-C - Light Green
-    '9,9,9': '#FF4444'      // PTFT - Red
+// Reactive bits for strategies 0..7 (000..111)
+const STRATEGY_BITS = {
+  0: [0, 0, 0],
+  1: [0, 0, 1],
+  2: [0, 1, 0],
+  3: [0, 1, 1],
+  4: [1, 0, 0],
+  5: [1, 0, 1],
+  6: [1, 1, 0],
+  7: [1, 1, 1]
 };
+
+// ----- NetLogo colors -----
+// NetLogo strategy-to-color:
+// 0 green, 1 cyan, 2 red, 3 magenta, 4 yellow, 5 dark gray, 6 light gray, 7 blue, 8 light orange
+const STRATEGY_COLOR = {
+  0: "#00C000", // green
+  1: "#00FFFF", // cyan
+  2: "#FF0000", // red
+  3: "#FF00FF", // magenta
+  4: "#FFFF00", // yellow
+  5: "#4D4D4D", // dark gray (approx NetLogo 7)
+  6: "#B3B3B3", // light gray (approx NetLogo 3)
+  7: "#0000FF", // blue
+  8: "#FFB366"  // light orange (approx NetLogo 27)
+};
+
+// NetLogo ethnicity-to-color: 0 red, 1 green
+const ETHNICITY_COLOR = {
+  0: "#FF0000",
+  1: "#00C000"
+};
+
+function randInt(n) {
+  return Math.floor(Math.random() * n);
+}
+
+function shufflePickOne(arr) {
+  return arr[randInt(arr.length)];
+}
 
 class Cell {
-    constructor(x, y, color, strategy) {
-        this.x = x;
-        this.y = y;
-        this.color = color; // 'red' or 'green'
-        this.strategy = strategy;
-        this.score = 0;
-        this.nextStrategy = strategy;
-    }
+  constructor(x, y, ethnicity, strategy) {
+    this.x = x;
+    this.y = y;
+    this.ethnicity = ethnicity; // 0 or 1
+    this.strategy = strategy;   // 0..8
+    this.newStrategy = strategy;
 
-    playGame(opponent, socialBonus) {
-        let rounds = 200;
-        let myScore = 0;
-        let oppScore = 0;
-        let myLastMove = null;
-        let oppLastMove = null;
+    this.score = 0;
+    this.cooperated = 0;
+    this.defected = 0;
+  }
 
-        for (let i = 0; i < rounds; i++) {
-            let myMove, oppMove;
-
-            // Determine moves based on strategies
-            if (this.isPTFT()) {
-                if (this.color === opponent.color) {
-                    // Play TFT with same color
-                    myMove = (i === 0) ? 1 : (oppLastMove === 1 ? 1 : 0);
-                } else {
-                    // Play All-D with different color
-                    myMove = 0;
-                }
-            } else {
-                // Regular strategy
-                if (i === 0) {
-                    myMove = this.strategy[0];
-                } else {
-                    myMove = oppLastMove === 1 ? this.strategy[1] : this.strategy[2];
-                }
-            }
-
-            if (opponent.isPTFT()) {
-                if (opponent.color === this.color) {
-                    oppMove = (i === 0) ? 1 : (myLastMove === 1 ? 1 : 0);
-                } else {
-                    oppMove = 0;
-                }
-            } else {
-                if (i === 0) {
-                    oppMove = opponent.strategy[0];
-                } else {
-                    oppMove = myLastMove === 1 ? opponent.strategy[1] : opponent.strategy[2];
-                }
-            }
-
-            // Calculate scores based on Prisoner's Dilemma matrix
-            if (myMove === 1 && oppMove === 1) {
-                myScore += 3; // Both cooperate
-                oppScore += 3;
-            } else if (myMove === 1 && oppMove === 0) {
-                myScore += 0; // I cooperate, they defect
-                oppScore += 5;
-            } else if (myMove === 0 && oppMove === 1) {
-                myScore += 5; // I defect, they cooperate
-                oppScore += 0;
-            } else {
-                myScore += 1; // Both defect
-                oppScore += 1;
-            }
-
-            myLastMove = myMove;
-            oppLastMove = oppMove;
-        }
-
-        // Add social identification bonus for PTFT playing with same color
-        // NOTE: apply bonus symmetrically where appropriate so each agent's
-        // payoff reflects their own PTFT extra benefit when interacting
-        // with same-group partners (enforces paper assumption: bonus
-        // applies to PTFT only in same-group interactions).
-        if (this.isPTFT() && this.color === opponent.color && socialBonus > 0) {
-            myScore += socialBonus;
-        }
-        if (opponent.isPTFT() && opponent.color === this.color && socialBonus > 0) {
-            oppScore += socialBonus;
-        }
-
-        // Return both players' scores so caller can accumulate them symmetrically
-        return [myScore, oppScore];
-    }
-
-    isPTFT() {
-        return this.strategy[0] === 9;
-    }
+  resetCounters() {
+    this.score = 0;
+    this.cooperated = 0;
+    this.defected = 0;
+  }
 }
 
 class Simulation {
-    constructor() {
-        this.gridSize = 64;
-        this.grid = [];
-        this.generation = 0;
-        this.running = false;
-        this.strategyCanvas = document.getElementById('strategyCanvas');
-        this.colorCanvas = document.getElementById('colorCanvas');
-        this.chartCanvas = document.getElementById('chartCanvas');
-        this.strategyCtx = this.strategyCanvas.getContext('2d');
-        this.colorCtx = this.colorCanvas.getContext('2d');
-        this.chartCtx = this.chartCanvas.getContext('2d');
-        this.history = [];
-        this.socialBonus = 0;
+  constructor() {
+    // NetLogo world is 64x64 by default
+    this.gridSize = 64;
 
-        this.setupEventListeners();
-        this.reset();
+    // UI state that matches NetLogo defaults:
+    this.isShowEthnicities = false; // show strategies by default
+    this.isSegregated = true;       // segregated by default
+
+    this.running = false;
+    this.generation = 0; // NetLogo ticks
+
+    // Canvas
+    this.canvas = document.getElementById("worldCanvas");
+    this.ctx = this.canvas.getContext("2d", { alpha: false });
+
+    // Data
+    this.grid = [];
+    this.totalCooperated = 0;
+    this.totalDefected = 0;
+
+    // Optional: chart/history (keep if you want)
+    this.history = [];
+
+    this.setupEventListeners();
+    this.reset();
+  }
+
+  // ---- Parameters from sliders (match NetLogo widgets) ----
+  get roundsToPlay() {
+    return parseInt(document.getElementById("rounds_to_play").value, 10);
+  }
+  get imitationRadius() {
+    return parseFloat(document.getElementById("imitation_radius").value);
+  }
+  get payoffs() {
+    return {
+      cc: parseInt(document.getElementById("payoffs_cc").value, 10),
+      cd: parseInt(document.getElementById("payoffs_cd").value, 10),
+      dc: parseInt(document.getElementById("payoffs_dc").value, 10),
+      dd: parseInt(document.getElementById("payoffs_dd").value, 10)
+    };
+  }
+
+  setupEventListeners() {
+    document.getElementById("startBtn").addEventListener("click", () => this.start());
+    document.getElementById("pauseBtn").addEventListener("click", () => this.pause());
+    document.getElementById("resetBtn").addEventListener("click", () => this.reset());
+
+    document.getElementById("toggleDisplayBtn").addEventListener("click", () => {
+      this.isShowEthnicities = !this.isShowEthnicities;
+      this.draw();
+    });
+
+    document.getElementById("desegregateBtn").addEventListener("click", () => {
+      this.isSegregated = !this.isSegregated;
+      this.initEthnicities(); // like NetLogo: ask patches [ init_ethnicity ]
+      this.draw();
+    });
+
+    // If these sliders change, NetLogo doesn't auto-reset; but web sims often do.
+    // We'll keep simulation state and just affect next steps.
+    // If you prefer, call this.reset() on changes.
+  }
+
+  reset() {
+    this.running = false;
+    this.generation = 0;
+    this.history = [];
+
+    // Canvas sizing: draw scaled pixels, but logical grid = gridSize
+    // We'll make canvas a fixed display size via CSS; logical size stays gridSize.
+    this.canvas.width = this.gridSize;
+    this.canvas.height = this.gridSize;
+
+    this.grid = [];
+    for (let x = 0; x < this.gridSize; x++) {
+      this.grid[x] = [];
+      for (let y = 0; y < this.gridSize; y++) {
+        // strategy = random 9 (0..8)
+        const s = randInt(9);
+
+        // ethnicity from init-patch: segregated by default, pxcor < 0 => ethnicity 0
+        // With x in [0..gridSize-1], "pxcor < 0" corresponds to left half.
+        const ethnicity = (x < this.gridSize / 2) ? 0 : 1;
+
+        this.grid[x][y] = new Cell(x, y, ethnicity, s);
+      }
     }
 
-    setupEventListeners() {
-        document.getElementById('startBtn').addEventListener('click', () => this.start());
-        document.getElementById('pauseBtn').addEventListener('click', () => this.pause());
-        document.getElementById('resetBtn').addEventListener('click', () => this.reset());
-        document.getElementById('environment').addEventListener('change', () => this.reset());
-        document.getElementById('gridSize').addEventListener('change', (e) => {
-            this.gridSize = parseInt(e.target.value);
-            this.reset();
-        });
-        document.getElementById('speed').addEventListener('input', (e) => {
-            document.getElementById('speedValue').textContent = e.target.value;
-        });
-        document.getElementById('socialBonus').addEventListener('input', (e) => {
-            this.socialBonus = parseInt(e.target.value);
-            document.getElementById('bonusValue').textContent = e.target.value;
-        });
-    }
+    this.totalCooperated = 0;
+    this.totalDefected = 0;
 
-    reset() {
-        this.generation = 0;
-        this.history = [];
-        this.grid = [];
-        const environment = document.getElementById('environment').value;
+    this.draw();
+    this.updateStatsUI();
+  }
 
-        // Set canvas sizes
-        this.strategyCanvas.width = this.gridSize;
-        this.strategyCanvas.height = this.gridSize;
-        this.colorCanvas.width = this.gridSize;
-        this.colorCanvas.height = this.gridSize;
-
-        // Initialize grid
-        for (let x = 0; x < this.gridSize; x++) {
-            this.grid[x] = [];
-            for (let y = 0; y < this.gridSize; y++) {
-                let color;
-
-                // Determine color based on environment type
-                if (environment === 'segregated') {
-                    color = x < this.gridSize / 2 ? 'green' : 'red';
-                } else if (environment === 'checkerboard') {
-                    color = (x + y) % 2 === 0 ? 'green' : 'red';
-                } else { // mixed
-                    color = Math.random() < 0.5 ? 'green' : 'red';
-                }
-
-                // Random strategy including PTFT
-                const strategies = Object.values(STRATEGIES);
-                const randomStrategy = strategies[Math.floor(Math.random() * strategies.length)];
-
-                this.grid[x][y] = new Cell(x, y, color, randomStrategy);
-            }
+  initEthnicities() {
+    // NetLogo init_ethnicity:
+    // if segregated: left half ethnicity 0, right half 1
+    // else random 2
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        const c = this.grid[x][y];
+        if (this.isSegregated) {
+          c.ethnicity = (x < this.gridSize / 2) ? 0 : 1;
+        } else {
+          c.ethnicity = randInt(2);
         }
+      }
+    }
+  }
 
-        this.draw();
-        this.updateStats();
+  wrap(v) {
+    const n = this.gridSize;
+    return (v % n + n) % n;
+  }
+
+  cellAt(x, y) {
+    return this.grid[this.wrap(x)][this.wrap(y)];
+  }
+
+  // NetLogo neighborhood: 8 neighbors for play_with_neighbors (fixed)
+  getEightNeighborOffsets() {
+    return [
+      [ 0,  1],
+      [ 1,  1],
+      [ 1,  0],
+      [ 1, -1],
+      [ 0, -1],
+      [-1, -1],
+      [-1,  0],
+      [-1,  1]
+    ];
+  }
+
+  // NetLogo in-radius (Euclidean) for evolve; torus wrapping
+  getCellsInRadius(cx, cy, r) {
+    const res = [];
+    const R = Math.ceil(r);
+    for (let dx = -R; dx <= R; dx++) {
+      for (let dy = -R; dy <= R; dy++) {
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist <= r) {
+          res.push(this.cellAt(cx + dx, cy + dy)); // includes self (dx=0,dy=0)
+        }
+      }
+    }
+    return res;
+  }
+
+  // ----- PTFT resolution exactly like NetLogo my-strategy / neighbor-strategy -----
+  resolveMyStrategyAgainst(me, other) {
+    if (me.strategy !== STRATEGY.PTFT) return me.strategy;
+    return (me.ethnicity === other.ethnicity) ? STRATEGY.TFT : STRATEGY.ALL_D;
+  }
+
+  resolveNeighborStrategyAgainst(other, me) {
+    // "neighbor-strategy": what is the neighbor's strategy when they play me?
+    if (other.strategy !== STRATEGY.PTFT) return other.strategy;
+    return (other.ethnicity === me.ethnicity) ? STRATEGY.TFT : STRATEGY.ALL_D;
+  }
+
+  // ----- NetLogo increment_cooperated -----
+  incrementCooperated(cell, inc) {
+    const rounds = this.roundsToPlay;
+    cell.cooperated += inc;
+    cell.defected += (rounds - inc);
+  }
+
+  // ----- Exact translation of NetLogo payoff reporter -----
+  payoff(s1, s2, cell) {
+    const rounds = this.roundsToPlay;
+    const { cc, cd, dc, dd } = this.payoffs;
+
+    // Helper constants used in multiple cases
+    const quarterMix = (cc + cd + dc + dd);
+
+    // 000
+    if (s1 === 0) this.incrementCooperated(cell, 0);
+    if (s1 === 0 && s2 === 0) return rounds * dd;
+    if (s1 === 0 && s2 === 1) return dd + (rounds - 1) * dc;
+    if (s1 === 0 && s2 === 2) return rounds * dd;
+    if (s1 === 0 && s2 === 3) return dd + (rounds - 1) * dc;
+    if (s1 === 0 && s2 === 4) return dc + (rounds - 1) * dd;
+    if (s1 === 0 && s2 === 5) return rounds * dc;
+    if (s1 === 0 && s2 === 6) return dc + (rounds - 1) * dd;
+    if (s1 === 0 && s2 === 7) return rounds * dc;
+
+    // 001
+    if (s1 === 1 && s2 === 0) { this.incrementCooperated(cell, rounds - 2); return dd + (rounds - 1) * cd; }
+    if (s1 === 1 && s2 === 1) { this.incrementCooperated(cell, rounds / 2); return (rounds / 2) * dd + (rounds / 2) * cc; }
+    if (s1 === 1 && s2 === 2) { this.incrementCooperated(cell, rounds / 2); return (rounds / 4) * quarterMix; }
+    if (s1 === 1 && s2 === 3) { this.incrementCooperated(cell, 1); return dd + cc + (rounds - 2) * dc; }
+    if (s1 === 1 && s2 === 4) { this.incrementCooperated(cell, rounds - 2); return dc + dd + (rounds - 2) * cd; }
+    if (s1 === 1 && s2 === 5) { this.incrementCooperated(cell, 0); return rounds * dc; }
+    if (s1 === 1 && s2 === 6) { this.incrementCooperated(cell, rounds / 2); return (rounds / 4) * quarterMix; }
+    if (s1 === 1 && s2 === 7) { this.incrementCooperated(cell, 0); return rounds * dc; }
+
+    // 010
+    if (s1 === 2 && s2 === 0) { this.incrementCooperated(cell, 0); return rounds * dd; }
+    if (s1 === 2 && s2 === 1) { this.incrementCooperated(cell, rounds / 2); return (rounds / 4) * quarterMix; }
+    if (s1 === 2 && s2 === 2) { this.incrementCooperated(cell, 0); return rounds * dd; }
+    if (s1 === 2 && s2 === 3) { this.incrementCooperated(cell, rounds - 2); return dd + dc + (rounds - 2) * cc; }
+    if (s1 === 2 && s2 === 4) { this.incrementCooperated(cell, 1); return dc + cd + (rounds - 2) * dd; }
+    if (s1 === 2 && s2 === 5) { this.incrementCooperated(cell, rounds / 2); return (rounds / 4) * quarterMix; }
+    if (s1 === 2 && s2 === 6) { this.incrementCooperated(cell, rounds / 2); return (rounds / 2) * dc + (rounds / 2) * cd; }
+    if (s1 === 2 && s2 === 7) { this.incrementCooperated(cell, rounds - 2); return dc + (rounds - 1) * cc; }
+
+    // 011
+    if (s1 === 3) this.incrementCooperated(cell, rounds - 1);
+    if (s1 === 3 && s2 === 0) return dd + (rounds - 1) * cd;
+    if (s1 === 3 && s2 === 1) return dd + cc + (rounds - 2) * cd;
+    if (s1 === 3 && s2 === 2) return dd + cd + (rounds - 2) * cc;
+    if (s1 === 3 && s2 === 3) return dd + (rounds - 1) * cc;
+    if (s1 === 3 && s2 === 4) return dc + (rounds - 1) * cd;
+    if (s1 === 3 && s2 === 5) return dc + cc + (rounds - 2) * cd;
+    if (s1 === 3 && s2 === 6) return dc + cd + (rounds - 2) * cc;
+    if (s1 === 3 && s2 === 7) return dc + (rounds - 1) * cc;
+
+    // 100
+    if (s1 === 4) this.incrementCooperated(cell, 1);
+    if (s1 === 4 && s2 === 0) return cd + (rounds - 1) * dd;
+    if (s1 === 4 && s2 === 1) return cd + dd + (rounds - 2) * dc;
+    if (s1 === 4 && s2 === 2) return cd + dc + (rounds - 2) * dd;
+    if (s1 === 4 && s2 === 3) return cd + (rounds - 1) * dc;
+    if (s1 === 4 && s2 === 4) return cc + (rounds - 1) * dd;
+    if (s1 === 4 && s2 === 5) return cc + dd + (rounds - 2) * dc;
+    if (s1 === 4 && s2 === 6) return cc + dc + (rounds - 2) * dd;
+    if (s1 === 4 && s2 === 7) return cc + (rounds - 1) * dc;
+
+    // 101
+    if (s1 === 5 && s2 === 0) { this.incrementCooperated(cell, rounds); return rounds * cd; }
+    if (s1 === 5 && s2 === 1) { this.incrementCooperated(cell, rounds); return rounds * cd; }
+    if (s1 === 5 && s2 === 2) { this.incrementCooperated(cell, rounds / 2); return 50 * quarterMix; } // NetLogo hardcodes 50 because rounds=200 default; keep literal translation
+    if (s1 === 5 && s2 === 3) { this.incrementCooperated(cell, 2); return cd + cc + (rounds - 2) * dc; }
+    if (s1 === 5 && s2 === 4) { this.incrementCooperated(cell, rounds - 2); return cc + dd + (rounds - 2) * cd; }
+    if (s1 === 5 && s2 === 5) { this.incrementCooperated(cell, rounds / 2); return (rounds / 2) * cc + (rounds / 2) * dd; }
+    if (s1 === 5 && s2 === 6) { this.incrementCooperated(cell, rounds / 2); return 50 * quarterMix; }
+    if (s1 === 5 && s2 === 7) { this.incrementCooperated(cell, 1); return cc + (rounds - 1) * dc; }
+
+    // 110
+    if (s1 === 6 && s2 === 0) { this.incrementCooperated(cell, 1); return cd + (rounds - 1) * dd; }
+    if (s1 === 6 && s2 === 1) { this.incrementCooperated(cell, rounds / 2); return 50 * quarterMix; }
+    if (s1 === 6 && s2 === 2) { this.incrementCooperated(cell, rounds / 2); return (rounds / 2) * cd + (rounds / 2) * dc; }
+    if (s1 === 6 && s2 === 3) { this.incrementCooperated(cell, rounds - 1); return cd + dc + (rounds - 2) * cc; }
+    if (s1 === 6 && s2 === 4) { this.incrementCooperated(cell, 2); return cc + cd + (rounds - 2) * dd; }
+    if (s1 === 6 && s2 === 5) { this.incrementCooperated(cell, rounds / 2); return 50 * quarterMix; }
+    if (s1 === 6 && s2 === 6) { this.incrementCooperated(cell, rounds); return rounds * cc; }
+    if (s1 === 6 && s2 === 7) { this.incrementCooperated(cell, rounds); return rounds * cc; }
+
+    // 111
+    if (s1 === 7) this.incrementCooperated(cell, rounds);
+    if (s1 === 7 && s2 === 0) return rounds * cd;
+    if (s1 === 7 && s2 === 1) return rounds * cd;
+    if (s1 === 7 && s2 === 2) return cd + (rounds - 1) * cc;
+    if (s1 === 7 && s2 === 3) return cd + (rounds - 1) * cc;
+    if (s1 === 7 && s2 === 4) return cc + (rounds - 1) * cd;
+    if (s1 === 7 && s2 === 5) return cc + (rounds - 1) * cd;
+    if (s1 === 7 && s2 === 6) return rounds * cc;
+    if (s1 === 7 && s2 === 7) return rounds * cc;
+
+    // Should never happen because PTFT is resolved before payoff
+    return 0;
+  }
+
+  // One directional interaction: "me plays neighbor"
+  playWithNeighbor(me, neighbor) {
+    const s1 = this.resolveMyStrategyAgainst(me, neighbor);
+    const s2 = this.resolveNeighborStrategyAgainst(neighbor, me);
+    return this.payoff(s1, s2, me);
+  }
+
+  step() {
+    // NetLogo: ask patches [ play_with_neighbors ]
+    // Each patch resets its counters and sums payoff vs 8 neighbors
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        this.grid[x][y].resetCounters();
+      }
     }
 
-    getNeighbors(x, y) {
-        const neighbors = [];
-        for (let dx = -1; dx <= 1; dx++) {
-            for (let dy = -1; dy <= 1; dy++) {
-                if (dx === 0 && dy === 0) continue;
-                const nx = (x + dx + this.gridSize) % this.gridSize;
-                const ny = (y + dy + this.gridSize) % this.gridSize;
-                neighbors.push(this.grid[nx][ny]);
-            }
+    const offsets = this.getEightNeighborOffsets();
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        const me = this.grid[x][y];
+        let sum = 0;
+        for (const [dx, dy] of offsets) {
+          const nb = this.cellAt(x + dx, y + dy);
+          sum += this.playWithNeighbor(me, nb);
         }
-        return neighbors;
+        me.score = sum;
+      }
     }
 
-    step() {
-        // Play games and calculate scores
-        // First zero all scores
-        for (let x = 0; x < this.gridSize; x++) {
-            for (let y = 0; y < this.gridSize; y++) {
-                this.grid[x][y].score = 0;
-            }
-        }
+    // NetLogo: ask patches [ evolve ]
+    // fittest-neighbor = max-one-of (patches in-radius imitation_radius) [score]
+    // if score < [score] of fittest-neighbor -> copy its strategy else keep own
+    const r = this.imitationRadius;
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        const me = this.grid[x][y];
+        const neighborhood = this.getCellsInRadius(x, y, r);
 
-        // Compute each unordered pair of neighbors once and add payoffs
-        // symmetrically to both agents (enforces paper assumption: each
-        // agent's total score is the sum of its own PD payoffs).
-        for (let x = 0; x < this.gridSize; x++) {
-            for (let y = 0; y < this.gridSize; y++) {
-                const cell = this.grid[x][y];
-                const neighbors = this.getNeighbors(x, y);
+        let maxScore = -Infinity;
+        for (const c of neighborhood) maxScore = Math.max(maxScore, c.score);
 
-                for (const neighbor of neighbors) {
-                    // Ensure each unordered pair is processed only once by using
-                    // a simple lexicographic ordering on coordinates. This avoids
-                    // double-counting interactions.
-                    if (neighbor.x < x) continue;
-                    if (neighbor.x === x && neighbor.y <= y) continue;
+        // random tie-break like NetLogo max-one-of
+        const best = shufflePickOne(neighborhood.filter(c => c.score === maxScore));
 
-                    const [s1, s2] = cell.playGame(neighbor, this.socialBonus);
-                    cell.score += s1;
-                    neighbor.score += s2;
-                }
-            }
-        }
-
-        // Update strategies based on most successful neighbor
-        for (let x = 0; x < this.gridSize; x++) {
-            for (let y = 0; y < this.gridSize; y++) {
-                const cell = this.grid[x][y];
-                const neighbors = this.getNeighbors(x, y);
-
-                // Per paper: identify the maximum score among neighbors (exclude
-                // the focal agent), collect all neighbors with that maximum,
-                // randomly select one, and copy its strategy. This implements
-                // stochastic tie-breaking among top-scoring neighbors rather than
-                // defaulting to keeping one's own strategy.
-                let maxScore = -Infinity;
-                for (const neighbor of neighbors) {
-                    if (neighbor.score > maxScore) maxScore = neighbor.score;
-                }
-
-                const topNeighbors = neighbors.filter(n => n.score === maxScore);
-                // Randomly break ties among top neighbors
-                const chosen = topNeighbors[Math.floor(Math.random() * topNeighbors.length)];
-                cell.nextStrategy = chosen.strategy;
-            }
-        }
-
-        // Apply strategy updates
-        for (let x = 0; x < this.gridSize; x++) {
-            for (let y = 0; y < this.gridSize; y++) {
-                this.grid[x][y].strategy = this.grid[x][y].nextStrategy;
-            }
-        }
-
-        this.generation++;
-        this.draw();
-        this.updateStats();
-        this.updateChart();
+        me.newStrategy = (me.score < best.score) ? best.strategy : me.strategy;
+      }
     }
 
-    draw() {
-        // Clear canvases
-        this.strategyCtx.clearRect(0, 0, this.gridSize, this.gridSize);
-        this.colorCtx.clearRect(0, 0, this.gridSize, this.gridSize);
-
-        // Draw cells
-        for (let x = 0; x < this.gridSize; x++) {
-            for (let y = 0; y < this.gridSize; y++) {
-                const cell = this.grid[x][y];
-
-                // Draw strategy
-                this.strategyCtx.fillStyle = STRATEGY_COLORS[cell.strategy.toString()];
-                this.strategyCtx.fillRect(x, y, 1, 1);
-
-                // Draw color
-                this.colorCtx.fillStyle = cell.color === 'green' ? '#44FF44' : '#FF4444';
-                this.colorCtx.fillRect(x, y, 1, 1);
-            }
-        }
+    // NetLogo: ask patches [ set strategy new_strategy ]
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        this.grid[x][y].strategy = this.grid[x][y].newStrategy;
+      }
     }
 
-    updateStats() {
-        let counts = {};
-        let total = this.gridSize * this.gridSize;
-
-        for (let x = 0; x < this.gridSize; x++) {
-            for (let y = 0; y < this.gridSize; y++) {
-                const strategy = this.grid[x][y].strategy.toString();
-                counts[strategy] = (counts[strategy] || 0) + 1;
-            }
-        }
-
-        document.getElementById('generation').textContent = this.generation;
-        document.getElementById('tftPercent').textContent = 
-            ((counts['1,1,0'] || 0) / total * 100).toFixed(1) + '%';
-        document.getElementById('ptftPercent').textContent = 
-            ((counts['9,9,9'] || 0) / total * 100).toFixed(1) + '%';
-        document.getElementById('allDPercent').textContent = 
-            ((counts['0,0,0'] || 0) / total * 100).toFixed(1) + '%';
-
-        // Store history for chart
-        this.history.push({
-            generation: this.generation,
-            tft: (counts['1,1,0'] || 0) / total * 100,
-            ptft: (counts['9,9,9'] || 0) / total * 100,
-            allD: (counts['0,0,0'] || 0) / total * 100,
-            allC: (counts['1,1,1'] || 0) / total * 100
-        });
+    // NetLogo: init-global-counters + ask patches [ count-total-cooperated ]
+    this.totalCooperated = 0;
+    this.totalDefected = 0;
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        const c = this.grid[x][y];
+        this.totalCooperated += c.cooperated;
+        this.totalDefected += c.defected;
+      }
     }
 
-    updateChart() {
-        const width = this.chartCanvas.width = this.chartCanvas.offsetWidth;
-        const height = this.chartCanvas.height = this.chartCanvas.offsetHeight;
-        const padding = 40;
+    this.generation++;
+    this.draw();
+    this.updateStatsUI();
+    this.updateHistory(); // optional chart
+  }
 
-        this.chartCtx.clearRect(0, 0, width, height);
+  draw() {
+    // Draw either strategies or ethnicities, like NetLogo display-agents
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        const c = this.grid[x][y];
+        const fill = this.isShowEthnicities
+          ? ETHNICITY_COLOR[c.ethnicity]
+          : STRATEGY_COLOR[c.strategy];
 
-        if (this.history.length < 2) return;
+        this.ctx.fillStyle = fill;
+        this.ctx.fillRect(x, y, 1, 1);
+      }
+    }
+  }
 
-        // Draw axes
-        this.chartCtx.strokeStyle = '#ddd';
-        this.chartCtx.lineWidth = 1;
-        this.chartCtx.beginPath();
-        this.chartCtx.moveTo(padding, padding);
-        this.chartCtx.lineTo(padding, height - padding);
-        this.chartCtx.lineTo(width - padding, height - padding);
-        this.chartCtx.stroke();
-
-        // Draw grid lines
-        for (let i = 0; i <= 10; i++) {
-            const y = padding + (height - 2 * padding) * i / 10;
-            this.chartCtx.beginPath();
-            this.chartCtx.moveTo(padding, y);
-            this.chartCtx.lineTo(width - padding, y);
-            this.chartCtx.strokeStyle = '#f0f0f0';
-            this.chartCtx.stroke();
-
-            // Y-axis labels
-            this.chartCtx.fillStyle = '#666';
-            this.chartCtx.font = '10px Arial';
-            this.chartCtx.textAlign = 'right';
-            this.chartCtx.fillText((100 - i * 10) + '%', padding - 5, y + 3);
-        }
-
-        // Plot lines
-        const xScale = (width - 2 * padding) / Math.max(50, this.history.length - 1);
-
-        const drawLine = (data, color, lineWidth = 2) => {
-            this.chartCtx.strokeStyle = color;
-            this.chartCtx.lineWidth = lineWidth;
-            this.chartCtx.beginPath();
-
-            for (let i = 0; i < this.history.length; i++) {
-                const x = padding + i * xScale;
-                const y = padding + (height - 2 * padding) * (1 - data[i] / 100);
-
-                if (i === 0) {
-                    this.chartCtx.moveTo(x, y);
-                } else {
-                    this.chartCtx.lineTo(x, y);
-                }
-            }
-            this.chartCtx.stroke();
-        };
-
-        // Draw lines for each strategy
-        drawLine(this.history.map(h => h.tft), '#000000', 3); // TFT in black
-        drawLine(this.history.map(h => h.ptft), '#FF4444', 2); // PTFT in red
-        drawLine(this.history.map(h => h.allD), '#4444FF', 2); // All-D in blue
-        drawLine(this.history.map(h => h.allC), '#44FF44', 2); // All-C in green
-
-        // X-axis labels
-        this.chartCtx.fillStyle = '#666';
-        this.chartCtx.font = '10px Arial';
-        this.chartCtx.textAlign = 'center';
-        for (let i = 0; i <= Math.min(this.generation, 50); i += 10) {
-            const x = padding + i * xScale;
-            this.chartCtx.fillText(i, x, height - padding + 15);
-        }
-
-        // Title
-        this.chartCtx.fillStyle = '#333';
-        this.chartCtx.font = 'bold 14px Arial';
-        this.chartCtx.textAlign = 'center';
-        this.chartCtx.fillText('Strategy Evolution Over Time', width / 2, 20);
+  updateStatsUI() {
+    // Match NetLogo’s semantics: plots show COUNTS, behavior shows totals
+    const counts = new Array(9).fill(0);
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        counts[this.grid[x][y].strategy]++;
+      }
     }
 
-    start() {
-        this.running = true;
-        this.run();
+    const setText = (id, v) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = String(v);
+    };
+
+    setText("ticks", this.generation);
+
+    // Strategy counts (like NetLogo plot pens)
+    setText("count_s0", counts[0]);
+    setText("count_s1", counts[1]);
+    setText("count_s2", counts[2]);
+    setText("count_s3", counts[3]);
+    setText("count_s4", counts[4]);
+    setText("count_s5", counts[5]);
+    setText("count_s6", counts[6]);
+    setText("count_s7", counts[7]);
+    setText("count_s8", counts[8]);
+
+    // Behavior totals (like NetLogo Behavior plot)
+    setText("total_cooperated", this.totalCooperated);
+    setText("total_defected", this.totalDefected);
+  }
+
+  updateHistory() {
+    // Optional: keep history in counts like NetLogo plots (not percents)
+    const counts = new Array(9).fill(0);
+    for (let x = 0; x < this.gridSize; x++) {
+      for (let y = 0; y < this.gridSize; y++) {
+        counts[this.grid[x][y].strategy]++;
+      }
     }
 
-    pause() {
-        this.running = false;
-    }
+    this.history.push({
+      tick: this.generation,
+      strategies: counts,
+      cooperated: this.totalCooperated,
+      defected: this.totalDefected
+    });
+  }
 
-    run() {
-        if (!this.running) return;
+  start() {
+    this.running = true;
+    this.runLoop();
+  }
 
-        this.step();
+  pause() {
+    this.running = false;
+  }
 
-        const speed = parseInt(document.getElementById('speed').value);
-        setTimeout(() => this.run(), speed);
-    }
+  runLoop() {
+    if (!this.running) return;
+    this.step();
+
+    const speedEl = document.getElementById("speed");
+    const delay = speedEl ? parseInt(speedEl.value, 10) : 50;
+    setTimeout(() => this.runLoop(), delay);
+  }
 }
 
-// Initialize simulation
+// Initialize
 const sim = new Simulation();
