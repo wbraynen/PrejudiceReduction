@@ -20,12 +20,38 @@
     }
 
     .app{
-      max-width: 1180px;
+      max-width: 1280px;
       margin: 0 auto;
       display:grid;
-      grid-template-columns: 260px 1fr 320px;
+      grid-template-columns: 240px 1fr 300px 240px;
       gap:16px;
       align-items:start;
+    }
+
+    .left-stack{
+      grid-column: 1;
+      grid-row: 1 / span 2;
+      display:flex;
+      flex-direction:column;
+      gap:16px;
+    }
+
+    .world{
+      grid-column: 2;
+      grid-row: 1 / span 2;
+    }
+
+    .plots-panel{
+      grid-column: 3;
+      grid-row: 1;
+    }
+
+    .right-stack{
+      grid-column: 4;
+      grid-row: 1;
+      display:flex;
+      flex-direction:column;
+      gap:16px;
     }
 
     .panel{
@@ -39,6 +65,18 @@
       font-size: 14px;
       margin: 0 0 10px 0;
       font-weight: 700;
+    }
+
+    .group{
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid #ddd;
+    }
+
+    .group-title{
+      font-size: 13px;
+      font-weight: 700;
+      margin: 0 0 8px 0;
     }
 
     label{
@@ -89,6 +127,10 @@
       font-size: 12px;
       text-transform: none;
       min-width: 56px;
+    }
+
+    .primary-btn{
+      background: #e9f3ff;
     }
 
     .button-wide{
@@ -195,6 +237,13 @@
 
     @media (max-width: 1050px){
       .app{ grid-template-columns: 1fr; }
+      .left-stack,
+      .world,
+      .plots-panel,
+      .right-stack{
+        grid-column: auto;
+        grid-row: auto;
+      }
       #worldCanvas{
         width: min(90vw, 448px);
         height: min(90vw, 448px);
@@ -206,12 +255,11 @@
   <div class="app">
 
     <!-- Left controls (NetLogo-like button column) -->
-    <div class="panel">
-      <h2>Controls</h2>
-
+    <div class="left-stack">
+      <div class="panel">
       <div class="buttonbar">
-        <button id="resetBtn" title="NetLogo: setup">setup</button>
-        <button id="startBtn" title="NetLogo: go">go</button>
+        <button id="resetBtn" class="primary-btn" title="NetLogo: setup">setup</button>
+        <button id="startBtn" class="primary-btn" title="NetLogo: go">go</button>
       </div>
 
       <div class="buttonbar">
@@ -219,27 +267,54 @@
         <button id="desegregateBtn" class="button-wide" title="NetLogo: (de)segregate">desegregate</button>
       </div>
 
-      <hr style="border:none;border-top:1px solid #ddd;margin:12px 0;">
+      <div class="group">
+        <div class="slider-row">
+          <label for="speed">speed (ms)</label>
+          <span class="value-pill" id="speedValue">100</span>
+        </div>
+        <input type="range" id="speed" min="50" max="1000" value="100" step="50" />
 
-      <div class="slider-row">
-        <label for="speed">speed (ms)</label>
-        <span class="value-pill" id="speedValue">100</span>
+        <div class="slider-row">
+          <label for="rounds_to_play">rounds to play</label>
+          <span class="value-pill" id="rounds_to_play_value">200</span>
+        </div>
+        <input type="range" id="rounds_to_play" min="4" max="200" step="4" value="200" />
+
+        <div class="slider-row">
+          <label for="imitation_radius">imitation radius</label>
+          <span class="value-pill" id="imitation_radius_value">1.5</span>
+        </div>
+        <input type="range" id="imitation_radius" min="1" max="3" step="0.5" value="1.5" />
       </div>
-      <input type="range" id="speed" min="50" max="1000" value="100" step="50" />
 
-      <hr style="border:none;border-top:1px solid #ddd;margin:12px 0;">
-
-      <div class="slider-row">
-        <label for="rounds_to_play">rounds to play</label>
-        <span class="value-pill" id="rounds_to_play_value">200</span>
       </div>
-      <input type="range" id="rounds_to_play" min="4" max="200" step="4" value="200" />
 
-      <div class="slider-row">
-        <label for="imitation_radius">imitation radius</label>
-        <span class="value-pill" id="imitation_radius_value">1.5</span>
+      <div class="panel">
+        <h2>Payoffs</h2>
+        <div class="slider-row">
+          <label for="payoffs_cc">CC</label>
+          <span class="value-pill" id="payoffs_cc_value">3</span>
+        </div>
+        <input type="range" id="payoffs_cc" min="0" max="10" step="1" value="3" />
+
+        <div class="slider-row">
+          <label for="payoffs_cd">CD</label>
+          <span class="value-pill" id="payoffs_cd_value">0</span>
+        </div>
+        <input type="range" id="payoffs_cd" min="0" max="10" step="1" value="0" />
+
+        <div class="slider-row">
+          <label for="payoffs_dc">DC</label>
+          <span class="value-pill" id="payoffs_dc_value">5</span>
+        </div>
+        <input type="range" id="payoffs_dc" min="0" max="10" step="1" value="5" />
+
+        <div class="slider-row">
+          <label for="payoffs_dd">DD</label>
+          <span class="value-pill" id="payoffs_dd_value">1</span>
+        </div>
+        <input type="range" id="payoffs_dd" min="0" max="10" step="1" value="1" />
       </div>
-      <input type="range" id="imitation_radius" min="1" max="3" step="0.5" value="1.5" />
     </div>
 
     <!-- Center: world view (single canvas like NetLogo) -->
@@ -254,6 +329,34 @@
         <canvas id="worldCanvas" width="64" height="64"></canvas>
       </div>
 
+    </div>
+
+    <div class="panel plot-panel plots-panel">
+      <h2>Plots (NetLogo)</h2>
+      <div style="font-size:12px;font-weight:700;margin:6px 0 6px 0;">Behavior</div>
+      <canvas id="behaviorPlot" class="plot-canvas" width="320" height="180"></canvas>
+      <div style="font-size:12px;font-weight:700;margin:10px 0 6px 0;">Strategies</div>
+      <canvas id="strategiesPlot" class="plot-canvas" width="320" height="180"></canvas>
+    </div>
+
+    <!-- Right controls (NetLogo-like sliders + strategy counts) -->
+    <div class="right-stack">
+      <div class="panel">
+        <h2>Strategies</h2>
+        <table class="mini-table">
+          <tr><th>strategy</th><th>count</th></tr>
+          <tr><td><span class="swatch" style="background:#00C000"></span>000 AllD</td><td id="count_s0">0</td></tr>
+          <tr><td><span class="swatch" style="background:#00FFFF"></span>001</td><td id="count_s1">0</td></tr>
+          <tr><td><span class="swatch" style="background:#FF0000"></span>010 STFT</td><td id="count_s2">0</td></tr>
+          <tr><td><span class="swatch" style="background:#FF00FF"></span>011</td><td id="count_s3">0</td></tr>
+          <tr><td><span class="swatch" style="background:#FFFF00"></span>100</td><td id="count_s4">0</td></tr>
+          <tr><td><span class="swatch" style="background:#4D4D4D"></span>101</td><td id="count_s5">0</td></tr>
+          <tr><td><span class="swatch" style="background:#B3B3B3"></span>110 TFT</td><td id="count_s6">0</td></tr>
+          <tr><td><span class="swatch" style="background:#0000FF"></span>111 AllC</td><td id="count_s7">0</td></tr>
+          <tr><td><span class="swatch" style="background:#FFB366"></span>PTFT</td><td id="count_s8">0</td></tr>
+        </table>
+      </div>
+
       <div class="panel">
         <h2>Behavior totals</h2>
         <table class="mini-table">
@@ -262,60 +365,8 @@
           <tr><td>D (defect)</td><td id="total_defected">0</td></tr>
         </table>
       </div>
-
-      <div class="panel plot-panel">
-        <h2>Plots (NetLogo)</h2>
-        <div style="font-size:12px;font-weight:700;margin:6px 0 6px 0;">Behavior</div>
-        <canvas id="behaviorPlot" class="plot-canvas" width="320" height="180"></canvas>
-        <div style="font-size:12px;font-weight:700;margin:10px 0 6px 0;">Strategies</div>
-        <canvas id="strategiesPlot" class="plot-canvas" width="320" height="180"></canvas>
-      </div>
     </div>
 
-    <!-- Right controls (NetLogo-like sliders + strategy counts) -->
-    <div class="panel">
-      <h2>Payoffs</h2>
-
-      <div class="slider-row">
-        <label for="payoffs_cc">CC</label>
-        <span class="value-pill" id="payoffs_cc_value">3</span>
-      </div>
-      <input type="range" id="payoffs_cc" min="0" max="10" step="1" value="3" />
-
-      <div class="slider-row">
-        <label for="payoffs_cd">CD</label>
-        <span class="value-pill" id="payoffs_cd_value">0</span>
-      </div>
-      <input type="range" id="payoffs_cd" min="0" max="10" step="1" value="0" />
-
-      <div class="slider-row">
-        <label for="payoffs_dc">DC</label>
-        <span class="value-pill" id="payoffs_dc_value">5</span>
-      </div>
-      <input type="range" id="payoffs_dc" min="0" max="10" step="1" value="5" />
-
-      <div class="slider-row">
-        <label for="payoffs_dd">DD</label>
-        <span class="value-pill" id="payoffs_dd_value">1</span>
-      </div>
-      <input type="range" id="payoffs_dd" min="0" max="10" step="1" value="1" />
-
-      <hr style="border:none;border-top:1px solid #ddd;margin:12px 0;">
-
-      <h2>Strategies</h2>
-      <table class="mini-table">
-        <tr><th>strategy</th><th>count</th></tr>
-        <tr><td><span class="swatch" style="background:#00C000"></span>000 AllD</td><td id="count_s0">0</td></tr>
-        <tr><td><span class="swatch" style="background:#00FFFF"></span>001</td><td id="count_s1">0</td></tr>
-        <tr><td><span class="swatch" style="background:#FF0000"></span>010 STFT</td><td id="count_s2">0</td></tr>
-        <tr><td><span class="swatch" style="background:#FF00FF"></span>011</td><td id="count_s3">0</td></tr>
-        <tr><td><span class="swatch" style="background:#FFFF00"></span>100</td><td id="count_s4">0</td></tr>
-        <tr><td><span class="swatch" style="background:#4D4D4D"></span>101</td><td id="count_s5">0</td></tr>
-        <tr><td><span class="swatch" style="background:#B3B3B3"></span>110 TFT</td><td id="count_s6">0</td></tr>
-        <tr><td><span class="swatch" style="background:#0000FF"></span>111 AllC</td><td id="count_s7">0</td></tr>
-        <tr><td><span class="swatch" style="background:#FFB366"></span>PTFT</td><td id="count_s8">0</td></tr>
-      </table>
-    </div>
 
   </div>
 
