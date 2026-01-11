@@ -656,9 +656,7 @@ class Simulation {
         // strategy = random 9 (0..8)
         const s = randInt(9);
 
-        // ethnicity from init-patch: segregated by default, pxcor < 0 => ethnicity 0
-        // With x in [0..gridSize-1], "pxcor < 0" corresponds to left half.
-        const ethnicity = (x < this.gridSize / 2) ? 0 : 1;
+        const ethnicity = 0;
 
         this.grid[x][y] = new Cell(x, y, ethnicity, s);
       }
@@ -667,6 +665,7 @@ class Simulation {
     this.totalCooperated = 0;
     this.totalDefected = 0;
 
+    this.initEthnicities();
     this.draw();
     this.updateStatsUI();
     this.renderPlots();
