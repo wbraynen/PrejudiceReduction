@@ -438,6 +438,22 @@ const ETHNICITY_COLOR = {
   1: "#00C000"
 };
 
+const STRATEGY_RGB = {};
+const ETHNICITY_RGB = {};
+
+function hexToRgb(hex) {
+  const cleaned = hex.replace("#", "");
+  const num = parseInt(cleaned, 16);
+  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+
+for (const [k, v] of Object.entries(STRATEGY_COLOR)) {
+  STRATEGY_RGB[k] = hexToRgb(v);
+}
+for (const [k, v] of Object.entries(ETHNICITY_COLOR)) {
+  ETHNICITY_RGB[k] = hexToRgb(v);
+}
+
 function drawLinePlot(canvas, seriesList, yMax, xSpan) {
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
@@ -532,10 +548,15 @@ class Simulation {
 
     this.running = false;
     this.generation = 0; // NetLogo ticks
+    this.lastFrameTime = 0;
+    this.accumulatorMs = 0;
+    this.rafId = 0;
 
     // Canvas
     this.canvas = document.getElementById("worldCanvas");
     this.ctx = this.canvas.getContext("2d", { alpha: false });
+    this.imageData = null;
+    this.imageDataData = null;
 
     // Plots
     this.strategiesPlotCanvas = document.getElementById("strategiesPlot");
@@ -610,7 +631,14 @@ class Simulation {
   }
 
   reset() {
+    const wasRunning = this.running;
     this.running = false;
+    this.lastFrameTime = 0;
+    this.accumulatorMs = 0;
+    if (this.rafId) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = 0;
+    }
     this.generation = 0;
     this.history = [];
 
@@ -618,6 +646,8 @@ class Simulation {
     // We'll make canvas a fixed display size via CSS; logical size stays gridSize.
     this.canvas.width = this.gridSize;
     this.canvas.height = this.gridSize;
+    this.imageData = this.ctx.createImageData(this.gridSize, this.gridSize);
+    this.imageDataData = this.imageData.data;
 
     this.grid = [];
     for (let x = 0; x < this.gridSize; x++) {
@@ -644,6 +674,13 @@ class Simulation {
     this.updateDisplayButton();
     this.updateDisplayModeLabel();
     this.updateSegregationButton();
+    if (wasRunning) {
+      this.running = true;
+      this.lastFrameTime = 0;
+      this.accumulatorMs = 0;
+      this.updateRunButton();
+      this.runLoop();
+    }
   }
 
   initEthnicities() {
@@ -890,17 +927,23 @@ class Simulation {
 
   draw() {
     // Draw either strategies or ethnicities, like NetLogo display-agents
+    const data = this.imageDataData;
+    const size = this.gridSize;
+    const palette = this.isShowEthnicities ? ETHNICITY_RGB : STRATEGY_RGB;
     for (let x = 0; x < this.gridSize; x++) {
       for (let y = 0; y < this.gridSize; y++) {
         const c = this.grid[x][y];
-        const fill = this.isShowEthnicities
-          ? ETHNICITY_COLOR[c.ethnicity]
-          : STRATEGY_COLOR[c.strategy];
-
-        this.ctx.fillStyle = fill;
-        this.ctx.fillRect(x, y, 1, 1);
+        const rgb = this.isShowEthnicities
+          ? palette[c.ethnicity]
+          : palette[c.strategy];
+        const i = (y * size + x) * 4;
+        data[i] = rgb[0];
+        data[i + 1] = rgb[1];
+        data[i + 2] = rgb[2];
+        data[i + 3] = 255;
       }
     }
+    this.ctx.putImageData(this.imageData, 0, 0);
   }
 
   updateStatsUI() {
@@ -983,7 +1026,10 @@ class Simulation {
   }
 
   start() {
+    if (this.running) return;
     this.running = true;
+    this.lastFrameTime = 0;
+    this.accumulatorMs = 0;
     this.runLoop();
   }
 
@@ -1024,10 +1070,29 @@ class Simulation {
     btn.textContent = this.isSegregated ? "desegregate" : "segregate";
   }
 
-  runLoop() {
+  runLoop(timestamp) {
     if (!this.running) return;
-    this.step();
-    setTimeout(() => this.runLoop(), 10);
+
+    if (!timestamp) {
+      this.rafId = requestAnimationFrame((t) => this.runLoop(t));
+      return;
+    }
+
+    if (!this.lastFrameTime) {
+      this.lastFrameTime = timestamp;
+    }
+
+    const delta = timestamp - this.lastFrameTime;
+    this.lastFrameTime = timestamp;
+    this.accumulatorMs += delta;
+
+    const stepMs = 300;
+    while (this.accumulatorMs >= stepMs) {
+      this.step();
+      this.accumulatorMs -= stepMs;
+    }
+
+    this.rafId = requestAnimationFrame((t) => this.runLoop(t));
   }
 }
 
