@@ -269,12 +269,6 @@
 
       <div class="group">
         <div class="slider-row">
-          <label for="speed">speed (ms)</label>
-          <span class="value-pill" id="speedValue">100</span>
-        </div>
-        <input type="range" id="speed" min="50" max="1000" value="100" step="50" />
-
-        <div class="slider-row">
           <label for="rounds_to_play">rounds to play</label>
           <span class="value-pill" id="rounds_to_play_value">200</span>
         </div>
@@ -385,13 +379,7 @@
     };
     ["payoffs_cc","payoffs_cd","payoffs_dc","payoffs_dd","rounds_to_play","imitation_radius"].forEach(bind);
 
-    const speed = document.getElementById("speed");
-    const speedValue = document.getElementById("speedValue");
-    if (speed && speedValue) {
-      const update = () => speedValue.textContent = speed.value;
-      speed.addEventListener("input", update);
-      update();
-    }
+ 
   </script>
 
   <!-- Your NetLogo-matched JS should target the element IDs in this HTML -->
@@ -1039,10 +1027,7 @@ class Simulation {
   runLoop() {
     if (!this.running) return;
     this.step();
-
-    const speedEl = document.getElementById("speed");
-    const delay = speedEl ? parseInt(speedEl.value, 10) : 50;
-    setTimeout(() => this.runLoop(), delay);
+    setTimeout(() => this.runLoop(), 10);
   }
 }
 
