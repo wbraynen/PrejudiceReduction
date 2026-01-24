@@ -2974,7 +2974,8 @@ Line -7500403 true 150 150 210 180
 ;; PORTED TO NETLOGO 7.0.3 - January 2026
 
 ;; Grid size: 64 x 64 patches (coordinates 0-63)
-;; Grid dimensions are configured in NetLogo's Settings dialog, not in code.
+;; Topology: torus (edges wrap horizontally and vertically)
+;; Both are configured in NetLogo's Settings dialog, not in code.
 
 patches-own [
   ethnicity
@@ -3317,6 +3318,10 @@ end`;
 // Grim, Mar, and St. Denis, MIT Press, 1998.)
 //
 // Ported to JavaScript from NetLogo - January 2026
+//
+// NOTE: This is an annotated excerpt of the simulation logic.
+// Some functions are abbreviated for clarity.
+// Full implementation is embedded in the HTML.
 
 // Strategy constants
 const STRATEGY = {
@@ -3441,6 +3446,7 @@ class Simulation {
 }`;
 
   document.getElementById('pseudoCode').innerHTML = `<span class="pseudo-heading">SETUP:</span>
+  Create 64x64 grid with torus topology (edges wrap)
   For each cell in grid:
     Assign random strategy (0-8)
     If segregated: left half = ethnicity 0, right half = ethnicity 1
