@@ -19,7 +19,7 @@
       color:var(--text);
       background:#ffffff;
       overflow-x: clip;
-      touch-action: pan-y;
+      touch-action: pan-y pinch-zoom;
     }
 
     .app{
@@ -1443,7 +1443,7 @@ class Cell {
 
 class Simulation {
   constructor() {
-    // NetLogo world is 64x64 by default
+    // Grid size: 64x64 (matching NetLogo model)
     this.gridSize = 64;
 
     // UI state that matches NetLogo defaults:
@@ -2374,10 +2374,10 @@ GRAPHICS-WINDOW
 1
 1
 1
--32
-32
--32
-32
+0
+63
+0
+63
 0
 0
 1
@@ -2973,6 +2973,9 @@ Line -7500403 true 150 150 210 180
 ;;
 ;; PORTED TO NETLOGO 7.0.3 - January 2026
 
+;; Grid size: 64 x 64 patches (coordinates 0-63)
+;; Grid dimensions are configured in NetLogo's Settings dialog, not in code.
+
 patches-own [
   ethnicity
   strategy
@@ -3043,9 +3046,9 @@ to init-patch
   init-patch-counters
   set strategy (random 9)
   ;; segregate by default:
-  ;; everything to the left of x = 0 is ethnicity 0;
-  ;; everything to the right of x = 0 is ethnicity 1
-  ifelse (pxcor < 0)
+  ;; left half (x < 32) is RedEthnicity;
+  ;; right half (x >= 32) is GreenEthnicity
+  ifelse (pxcor < 32)
     [ set ethnicity RedEthnicity ]
     [ set ethnicity GreenEthnicity ]
 end
@@ -3125,7 +3128,7 @@ end
 ;; (as part of the desegregate toggle)
 to init_ethnicity
   ifelse is_segregated
-     [ ifelse (pxcor < 0)
+     [ ifelse (pxcor < 32)
        [ set ethnicity RedEthnicity ]
        [ set ethnicity GreenEthnicity ]]
      [ set ethnicity (random 2) ]
