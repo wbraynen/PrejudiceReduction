@@ -239,6 +239,14 @@
       border: 1px solid #ddd;
     }
 
+    #torusCanvas{
+      width: 448px;
+      height: 448px;
+      display:block;
+      border: 1px solid #ddd;
+      background: #1a1a2e;
+    }
+
     .mini-table{
       width: 100%;
       border-collapse: collapse;
@@ -879,6 +887,11 @@
         height: min(90vw, 448px);
       }
 
+      #torusCanvas{
+        width: min(90vw, 448px);
+        height: min(90vw, 448px);
+      }
+
       .canvas-wrap {
         max-width: 100%;
       }
@@ -905,6 +918,13 @@
       }
       
       #worldCanvas{
+        width: 100%;
+        height: auto;
+        aspect-ratio: 1 / 1;
+        max-width: none;
+      }
+
+      #torusCanvas{
         width: 100%;
         height: auto;
         aspect-ratio: 1 / 1;
@@ -1105,6 +1125,8 @@
     <div class="canvas-wrap">
       <div id="displayMode" style="font-size:0.75rem;font-weight:400;margin-bottom:6px;">Displaying strategies</div>
       <canvas id="worldCanvas" width="64" height="64" role="img" aria-label="64 by 64 grid simulation showing agent strategies or ethnicities. Strategy counts are listed in the Strategies table."></canvas>
+      <canvas id="torusCanvas" width="448" height="448" style="display:none;"></canvas>
+      <button id="torusToggleBtn" style="margin-top:8px;padding:6px 12px;font-size:0.75rem;cursor:pointer;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;">Show as Torus</button>
     </div>
 
     <div class="panel plot-panel plots-panel">
@@ -3500,6 +3522,7 @@ class Simulation {
 })();
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
 // Register NetLogo language for highlight.js
 hljs.registerLanguage('netlogo', function(hljs) {
@@ -3588,6 +3611,190 @@ hljs.highlightAll();
       input.addEventListener('change', () => updateCard(card));
     });
   }
+
+  // 3D Torus Visualization
+  class TorusViewer {
+    constructor(sourceCanvas, targetCanvas) {
+      this.sourceCanvas = sourceCanvas;
+      this.targetCanvas = targetCanvas;
+      this.isActive = false;
+      this.scene = null;
+      this.camera = null;
+      this.renderer = null;
+      this.torus = null;
+      this.texture = null;
+      this.animationId = null;
+      this.isDragging = false;
+      this.previousMousePosition = { x: 0, y: 0 };
+      this.rotation = { x: 0.5, y: 0.5 };
+    }
+
+    init() {
+      if (this.scene) return; // Already initialized
+
+      // Scene
+      this.scene = new THREE.Scene();
+      this.scene.background = new THREE.Color(0x1a1a2e);
+
+      // Camera
+      this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
+      this.camera.position.z = 4;
+
+      // Renderer - use CSS-computed size
+      this.renderer = new THREE.WebGLRenderer({ 
+        canvas: this.targetCanvas, 
+        antialias: true 
+      });
+      this.updateRendererSize();
+
+      // Handle window resize
+      window.addEventListener('resize', () => this.updateRendererSize());
+
+      // Create texture from source canvas
+      this.texture = new THREE.CanvasTexture(this.sourceCanvas);
+      this.texture.magFilter = THREE.NearestFilter;
+      this.texture.minFilter = THREE.NearestFilter;
+
+      // Torus geometry - (tube radius, tube thickness, radial segments, tubular segments)
+      const geometry = new THREE.TorusGeometry(1.2, 0.6, 64, 100);
+      const material = new THREE.MeshBasicMaterial({ 
+        map: this.texture,
+        side: THREE.DoubleSide
+      });
+      this.torus = new THREE.Mesh(geometry, material);
+      this.scene.add(this.torus);
+
+      // Mouse/touch controls for rotation
+      this.setupControls();
+    }
+
+    updateRendererSize() {
+      if (!this.renderer) return;
+      // Get the CSS-computed size of the torus canvas
+      const style = getComputedStyle(this.targetCanvas);
+      const width = parseFloat(style.width) || 448;
+      const height = parseFloat(style.height) || 448;
+      const size = Math.min(width, height);
+      this.renderer.setSize(size, size, false);
+    }
+
+    setupControls() {
+      const canvas = this.targetCanvas;
+
+      const onStart = (x, y) => {
+        this.isDragging = true;
+        this.previousMousePosition = { x, y };
+      };
+
+      const onMove = (x, y) => {
+        if (!this.isDragging) return;
+        const deltaX = x - this.previousMousePosition.x;
+        const deltaY = y - this.previousMousePosition.y;
+        this.rotation.y += deltaX * 0.01;
+        this.rotation.x += deltaY * 0.01;
+        this.previousMousePosition = { x, y };
+      };
+
+      const onEnd = () => {
+        this.isDragging = false;
+      };
+
+      // Mouse events
+      canvas.addEventListener('mousedown', (e) => onStart(e.clientX, e.clientY));
+      canvas.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
+      canvas.addEventListener('mouseup', onEnd);
+      canvas.addEventListener('mouseleave', onEnd);
+
+      // Touch events
+      canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+          e.preventDefault();
+          onStart(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      }, { passive: false });
+      canvas.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 1) {
+          e.preventDefault();
+          onMove(e.touches[0].clientX, e.touches[0].clientY);
+        }
+      }, { passive: false });
+      canvas.addEventListener('touchend', onEnd);
+    }
+
+    start() {
+      this.init();
+      this.isActive = true;
+      // Update size after canvas becomes visible
+      requestAnimationFrame(() => this.updateRendererSize());
+      this.animate();
+    }
+
+    stop() {
+      this.isActive = false;
+      if (this.animationId) {
+        cancelAnimationFrame(this.animationId);
+        this.animationId = null;
+      }
+    }
+
+    animate() {
+      if (!this.isActive) return;
+      this.animationId = requestAnimationFrame(() => this.animate());
+
+      // Apply rotation
+      this.torus.rotation.x = this.rotation.x;
+      this.torus.rotation.y = this.rotation.y;
+
+      // Update texture from source canvas
+      if (this.texture) {
+        this.texture.needsUpdate = true;
+      }
+
+      this.renderer.render(this.scene, this.camera);
+    }
+
+    updateTexture() {
+      if (this.texture) {
+        this.texture.needsUpdate = true;
+      }
+    }
+  }
+
+  // Initialize torus viewer
+  let torusViewer = null;
+  let torusActive = false;
+
+  function initTorusViewer() {
+    const sourceCanvas = document.getElementById('worldCanvas');
+    const targetCanvas = document.getElementById('torusCanvas');
+    const toggleBtn = document.getElementById('torusToggleBtn');
+
+    if (!sourceCanvas || !targetCanvas || !toggleBtn) return;
+
+    torusViewer = new TorusViewer(sourceCanvas, targetCanvas);
+
+    toggleBtn.addEventListener('click', () => {
+      torusActive = !torusActive;
+      if (torusActive) {
+        sourceCanvas.style.display = 'none';
+        targetCanvas.style.display = 'block';
+        toggleBtn.textContent = 'Show as Grid';
+        torusViewer.start();
+      } else {
+        sourceCanvas.style.display = 'block';
+        targetCanvas.style.display = 'none';
+        toggleBtn.textContent = 'Show as Torus';
+        torusViewer.stop();
+      }
+    });
+  }
+
+  // Call after DOM is ready
+  const originalInit = init;
+  init = function() {
+    originalInit();
+    initTorusViewer();
+  };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
