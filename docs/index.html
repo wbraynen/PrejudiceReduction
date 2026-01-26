@@ -1118,7 +1118,7 @@
     <!-- Center: world title (row 1) -->
     <div class="world-title">
       <h1>Spatialized Prisoner's Dilemma (with PTFT)</h1>
-      <div class="ticks">round: <span id="ticks">0</span></div>
+      <div class="ticks" id="roundCounter">round: <span id="ticks">0</span></div>
     </div>
 
     <!-- Center: world canvas (row 2) -->
@@ -1126,7 +1126,7 @@
       <div id="displayMode" style="font-size:0.75rem;font-weight:400;margin-bottom:6px;">Displaying strategies</div>
       <canvas id="worldCanvas" width="64" height="64" role="img" aria-label="64 by 64 grid simulation showing agent strategies or ethnicities. Strategy counts are listed in the Strategies table."></canvas>
       <canvas id="torusCanvas" width="448" height="448" style="display:none;"></canvas>
-      <button id="torusToggleBtn" style="margin-top:8px;padding:6px 12px;font-size:0.75rem;cursor:pointer;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;">Show as Torus</button>
+      <button id="torusToggleBtn" style="display:none;margin-top:8px;padding:6px 12px;font-size:0.75rem;cursor:pointer;border:1px solid #ccc;border-radius:4px;background:#f5f5f5;">Show as Torus</button>
     </div>
 
     <div class="panel plot-panel plots-panel">
@@ -3794,7 +3794,58 @@ hljs.highlightAll();
   init = function() {
     originalInit();
     initTorusViewer();
+    initEasterEgg();
   };
+
+  // Easter egg: type "donut" to reveal torus button
+  function initEasterEgg() {
+    const btn = document.getElementById('torusToggleBtn');
+    
+    // Desktop: type "donut"
+    let buffer = '';
+    const secret = 'donut';
+    
+    document.addEventListener('keydown', (e) => {
+      // Ignore if typing in an input field
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      
+      // Only track single character keys
+      if (e.key.length !== 1) return;
+      
+      buffer += e.key.toLowerCase();
+      // Keep only last N characters
+      if (buffer.length > secret.length) {
+        buffer = buffer.slice(-secret.length);
+      }
+      
+      if (buffer === secret) {
+        if (btn) btn.style.display = 'block';
+        buffer = '';
+      }
+    });
+
+    // Mobile: triple-tap on round counter
+    const roundCounter = document.getElementById('roundCounter');
+    if (roundCounter) {
+      let tapCount = 0;
+      let tapTimeout = null;
+      
+      roundCounter.addEventListener('click', () => {
+        tapCount++;
+        
+        if (tapTimeout) clearTimeout(tapTimeout);
+        
+        tapTimeout = setTimeout(() => {
+          tapCount = 0;
+        }, 500); // Reset after 500ms of no taps
+        
+        if (tapCount >= 3) {
+          if (btn) btn.style.display = 'block';
+          tapCount = 0;
+        }
+      });
+    }
+  }
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
