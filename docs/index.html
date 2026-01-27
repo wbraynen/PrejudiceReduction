@@ -1118,7 +1118,7 @@
     <!-- Center: world title (row 1) -->
     <div class="world-title">
       <h1>Spatialized Prisoner's Dilemma (with PTFT)</h1>
-      <div class="ticks" id="roundCounter">round: <span id="ticks">0</span></div>
+      <div class="ticks">round: <span id="ticks">0</span></div>
     </div>
 
     <!-- Center: world canvas (row 2) -->
@@ -3555,17 +3555,17 @@ hljs.highlightAll();
 <script>
 // Dynamically update payoff card background based on payoff value (0–10)
 // Color meaning:
-//   green = cooperation rewarded
-//   red   = defection rewarded
+//   blue = cooperation rewarded
+//   red  = defection rewarded
 // Mapping (0->10):
-//   CC, CD : red -> green
-//   DC, DD : green -> red
+//   CC, CD : red -> blue
+//   DC, DD : blue -> red
 (function () {
   const MAX = 10;
 
   // Very light iOS-like tints
-  const RED   = { r: 255, g: 59,  b: 48, a: 0.12 };  // defection rewarded
-  const GREEN = { r: 52,  g: 199, b: 89, a: 0.12 };  // cooperation rewarded
+  const RED  = { r: 255, g: 59,  b: 48,  a: 0.12 };  // defection rewarded
+  const BLUE = { r: 10,  g: 132, b: 255, a: 0.12 };  // cooperation rewarded
 
   function mix(c1, c2, t) {
     return {
@@ -3797,13 +3797,12 @@ hljs.highlightAll();
     initEasterEgg();
   };
 
-  // Easter egg: type "donut" to reveal torus button
+  // Easter egg: type "bagel" to reveal torus button
   function initEasterEgg() {
     const btn = document.getElementById('torusToggleBtn');
     
-    // Desktop: type "donut"
     let buffer = '';
-    const secret = 'donut';
+    const secret = 'bagel';
     
     document.addEventListener('keydown', (e) => {
       // Ignore if typing in an input field
@@ -3823,28 +3822,6 @@ hljs.highlightAll();
         buffer = '';
       }
     });
-
-    // Mobile: triple-tap on round counter
-    const roundCounter = document.getElementById('roundCounter');
-    if (roundCounter) {
-      let tapCount = 0;
-      let tapTimeout = null;
-      
-      roundCounter.addEventListener('click', () => {
-        tapCount++;
-        
-        if (tapTimeout) clearTimeout(tapTimeout);
-        
-        tapTimeout = setTimeout(() => {
-          tapCount = 0;
-        }, 500); // Reset after 500ms of no taps
-        
-        if (tapCount >= 3) {
-          if (btn) btn.style.display = 'block';
-          tapCount = 0;
-        }
-      });
-    }
   }
 
   if (document.readyState === 'loading') {
