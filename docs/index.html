@@ -3577,12 +3577,12 @@ hljs.highlightAll();
   }
 
   function endpointsForCard(card) {
-    // Default: red->green
-    let from = RED, to = GREEN;
+    // Default: red->blue
+    let from = RED, to = BLUE;
 
     if (card.classList.contains('payoff-dc') || card.classList.contains('payoff-dd')) {
-      // DC/DD: green->red
-      from = GREEN; to = RED;
+      // DC/DD: blue->red
+      from = BLUE; to = RED;
     }
     return { from, to };
   }
